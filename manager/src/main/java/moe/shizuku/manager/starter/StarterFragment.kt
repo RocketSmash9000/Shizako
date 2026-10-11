@@ -42,6 +42,22 @@ class StarterFragment : Fragment() {
 
     private var shell: FragmentSubPageBinding? = null
 
+    /** 服务起来后延迟关窗用的回调。必须能在视图销毁时撤掉：
+     *  以前是匿名 lambda 直接 postDelayed，Fragment 已经不在 FragmentManager 里了
+     *  回调还在跑，`findNavController()` 内部调用 `getParentFragmentManager()` 就抛
+     *  `IllegalStateException: Fragment StarterFragment{...} not associated with a
+     *  fragment manager`（zako3.12 线上崩溃日志）。 */
+    private val navigateUpRunnable = Runnable {
+        if (!isAdded || isRemoving) return@Runnable
+        val nav = runCatching { findNavController() }.getOrNull() ?: return@Runnable
+        runCatching { nav.navigateUp() }
+    }
+
+    /** 等服务的监听器，销毁时要摘掉，否则会留到下一次 binder 事件上 */
+    private var binderReceivedListener: Shizuku.OnBinderReceivedListener? = null
+
+    private var autoCloseArmed = false
+
     private val viewModel by viewModels {
         ViewModel(
             requireContext().applicationContext,
@@ -62,20 +78,23 @@ class StarterFragment : Fragment() {
 
         viewModel.output.observe(viewLifecycleOwner) {
             val output = it.data!!.trim()
-            if (output.endsWith("info: shizuku_starter exit with 0")) {
+            if (!autoCloseArmed && output.endsWith("info: shizuku_starter exit with 0")) {
+                autoCloseArmed = true
                 viewModel.appendOutput("")
                 viewModel.appendOutput("Waiting for service...")
 
-                Shizuku.addBinderReceivedListener(object : Shizuku.OnBinderReceivedListener {
+                val listener = object : Shizuku.OnBinderReceivedListener {
                     override fun onBinderReceived() {
-                        Shizuku.removeBinderReceivedListener(this)
+                        binderReceivedListener?.let { Shizuku.removeBinderReceivedListener(it) }
+                        binderReceivedListener = null
                         viewModel.appendOutput("Service started, this window will be automatically closed in 3 seconds")
 
-                        view?.postDelayed({
-                            findNavController().navigateUp()
-                        }, 3000)
+                        view?.removeCallbacks(navigateUpRunnable)
+                        view?.postDelayed(navigateUpRunnable, 3000)
                     }
-                })
+                }
+                binderReceivedListener = listener
+                Shizuku.addBinderReceivedListener(listener)
             } else if (it.status == Status.ERROR) {
                 var message = 0
                 when (it.error) {
@@ -116,6 +135,10 @@ class StarterFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        binderReceivedListener?.let { Shizuku.removeBinderReceivedListener(it) }
+        binderReceivedListener = null
+        autoCloseArmed = false
+        shell?.root?.removeCallbacks(navigateUpRunnable)
         shell = null
     }
 

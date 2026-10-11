@@ -493,12 +493,21 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
             int userId = UserHandleCompat.getUserId(uid);
             for (String packageName : PackageManagerApis.getPackagesForUidNoThrow(uid)) {
                 PackageInfo pi = PackageManagerApis.getPackageInfoNoThrow(packageName, PackageManager.GET_PERMISSIONS, userId);
-                if (pi == null || pi.requestedPermissions == null || !ArraysKt.contains(pi.requestedPermissions, PERMISSION)) {
+                if (pi == null || pi.requestedPermissions == null) {
+                    continue;
+                }
+
+                String permission;
+                if (ArraysKt.contains(pi.requestedPermissions, PERMISSION)) {
+                    permission = PERMISSION;
+                } else if (ArraysKt.contains(pi.requestedPermissions, PERMISSION_UPSTREAM_API)) {
+                    permission = PERMISSION_UPSTREAM_API;
+                } else {
                     continue;
                 }
 
                 try {
-                    if (PermissionManagerApis.checkPermission(PERMISSION, uid) == PackageManager.PERMISSION_GRANTED) {
+                    if (PermissionManagerApis.checkPermission(permission, uid) == PackageManager.PERMISSION_GRANTED) {
                         return ConfigManager.FLAG_ALLOWED;
                     }
                 } catch (Throwable e) {
@@ -527,6 +536,10 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
         int userId = UserHandleCompat.getUserId(uid);
 
+        // 本次写进配置的包名。必须带上：配置记录的 packages 是「这个 uid 下算哪些包」
+        // 的依据（见 getApplications 的匹配逻辑），记录写成空的会让应用在刷新后消失。
+        List<String> packages = new ArrayList<>();
+
         if ((mask & ConfigManager.MASK_PERMISSION) != 0) {
             boolean allowed = (value & ConfigManager.FLAG_ALLOWED) != 0;
             boolean denied = (value & ConfigManager.FLAG_DENIED) != 0;
@@ -544,22 +557,41 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
 
             for (String packageName : PackageManagerApis.getPackagesForUidNoThrow(uid)) {
                 PackageInfo pi = PackageManagerApis.getPackageInfoNoThrow(packageName, PackageManager.GET_PERMISSIONS, userId);
-                if (pi == null || pi.requestedPermissions == null || !ArraysKt.contains(pi.requestedPermissions, PERMISSION)) {
+                if (pi == null || pi.requestedPermissions == null) {
                     continue;
                 }
 
-                int deviceId = 0;//Context.DEVICE_ID_DEFAULT
-                if (allowed) {
-                    PermissionManagerApis.grantRuntimePermission(packageName, PERMISSION, userId);
+                // 用官方 dev.rikka.shizuku:api 构建的应用只声明上游权限名，它们一样会
+                // 出现在列表里；授/撤运行时权限必须用它实际声明的那一个，否则会抛异常。
+                String permission;
+                if (ArraysKt.contains(pi.requestedPermissions, PERMISSION)) {
+                    permission = PERMISSION;
+                } else if (ArraysKt.contains(pi.requestedPermissions, PERMISSION_UPSTREAM_API)) {
+                    permission = PERMISSION_UPSTREAM_API;
                 } else {
-                    PermissionManagerApis.revokeRuntimePermission(packageName, PERMISSION, userId);
+                    continue;
+                }
+
+                packages.add(packageName);
+
+                int deviceId = 0;//Context.DEVICE_ID_DEFAULT
+                try {
+                    if (allowed) {
+                        PermissionManagerApis.grantRuntimePermission(packageName, permission, userId);
+                    } else {
+                        PermissionManagerApis.revokeRuntimePermission(packageName, permission, userId);
+                    }
+                } catch (Throwable e) {
+                    // 单个包失败不能中断整轮：否则下面的配置写入也被跳过，
+                    // 结果就是授权记录压根没落下。
+                    LOGGER.w(e, "updateFlagsForUid: " + (allowed ? "grant " : "revoke ") + packageName);
                 }
 
                 // TODO kill user service using
             }
         }
 
-        configManager.update(uid, null, mask, value);
+        configManager.update(uid, packages.isEmpty() ? null : packages, mask, value);
     }
 
     private void onPermissionRevoked(String packageName) {
@@ -585,7 +617,13 @@ public class ShizukuService extends Service<ShizukuUserServiceManager, ShizukuCl
                 int flags = 0;
                 ShizukuConfig.PackageEntry entry = configManager.find(uid);
                 if (entry != null) {
-                    if (entry.packages != null && !entry.packages.contains(pi.packageName))
+                    // packages 为空的记录视为「不限定包名」。
+                    // 服务启动之后才新建的记录（应用在服务启动后才安装 / 才被授权）以及
+                    // 旧版本写坏的 shizuku.json 里都可能是空 packages；这种记录如果按
+                    // 「包名不在记录里」把应用剔掉，表现就是：在「应用管理」里给一个应用
+                    // 授权，刷新之后它整条从列表里消失。
+                    if (entry.packages != null && !entry.packages.isEmpty()
+                            && !entry.packages.contains(pi.packageName))
                         continue;
                     flags = entry.flags & ConfigManager.MASK_PERMISSION;
                 }

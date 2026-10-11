@@ -1,6 +1,7 @@
 package rikka.shizuku.server;
 
 import static rikka.shizuku.server.ServerConstants.PERMISSION;
+import static rikka.shizuku.server.ServerConstants.PERMISSION_UPSTREAM_API;
 
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -152,15 +153,26 @@ public class ShizukuConfigManager extends ConfigManager {
             for (PackageInfo pi : ApiCompat.getInstalledPackagesNoThrow(PackageManager.GET_PERMISSIONS, userId)) {
                 if (pi == null
                         || pi.applicationInfo == null
-                        || pi.requestedPermissions == null
-                        || !ArraysKt.contains(pi.requestedPermissions, PERMISSION)) {
+                        || pi.requestedPermissions == null) {
+                    continue;
+                }
+
+                // 与 ShizukuService.getApplications 对齐：用官方 dev.rikka.shizuku:api
+                // 构建的应用只声明上游权限名，也要在这里建记录，否则它们要到被授权那一刻
+                // 才第一次有记录，而那时新建的记录不带包名（会让应用从列表里消失）。
+                String permission;
+                if (ArraysKt.contains(pi.requestedPermissions, PERMISSION)) {
+                    permission = PERMISSION;
+                } else if (ArraysKt.contains(pi.requestedPermissions, PERMISSION_UPSTREAM_API)) {
+                    permission = PERMISSION_UPSTREAM_API;
+                } else {
                     continue;
                 }
 
                 int uid = pi.applicationInfo.uid;
                 boolean allowed;
                 try {
-                    allowed = PermissionManagerApis.checkPermission(PERMISSION, uid) == PackageManager.PERMISSION_GRANTED;
+                    allowed = PermissionManagerApis.checkPermission(permission, uid) == PackageManager.PERMISSION_GRANTED;
                 } catch (Throwable e) {
                     LOGGER.w("checkPermission");
                     continue;

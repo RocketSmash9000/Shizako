@@ -95,6 +95,24 @@ android {
     }
 }
 
+// ══════════ F-Droid 变体的 manifest 覆盖层 ══════════
+// 只给 `-Pfdroid` 的构建多喂一份只做减项的 manifest（tools:node="remove"），
+// 用来去掉本变体里没有任何使用方的权限声明 —— 目前是
+// android.permission.REQUEST_INSTALL_PACKAGES，详见该文件里的注释。
+//
+// 为什么不用 productFlavors：flavor 会把产物路径改成 apk/<flavor>/release/，
+// 牵动发版脚本、官网下载链接和 F-Droid recipe；这里任务名、产物路径、
+// 变体名（release）全都不变，只是同一变体多一个 manifest 合并输入。
+// 注意 API 是 addStaticManifestFile（ManifestFiles 上**没有**
+// addStaticSourceDirectory，那个方法在 SourceDirectories.Layered 上）。
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        if (fdroidBuild) {
+            variant.sources.manifests?.addStaticManifestFile('src/fdroid/AndroidManifest.xml')
+        }
+    }
+}
+
 autoResConfig {
     generatedClassFullName = "rikka.shizuku.manager.ShizukuLocales"
     generateRes = false

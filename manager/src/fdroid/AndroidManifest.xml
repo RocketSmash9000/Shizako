@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  F-Droid 变体专用的 manifest 覆盖层：**只在 `-Pfdroid` 时加入构建**
+  （接线见 manager/build.gradle 的 androidComponents 段）。
+
+  这里只做减项，不加任何新东西。主 manifest 是唯一的「完整版」事实来源，
+  两个变体的差异在合并期一次性收掉，不需要维护第二份完整 manifest。
+
+  为什么去掉 android.permission.REQUEST_INSTALL_PACKAGES：
+  本变体编译掉了自我更新、一键注入第三方 APK 与兼容性占位包
+  （见 fdroid/FdroidBuild.kt），仓库里没有任何一处使用 PackageInstaller
+  或 ACTION_INSTALL_PACKAGE —— 更新流程只是把已下载的 APK 用 ACTION_VIEW
+  交给系统安装器，调用方不需要这个权限。留着它只会在安装时多出一条
+  「安装未知应用」的权限条目，让用户以为应用能自行装包。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission
+        android:name="android.permission.REQUEST_INSTALL_PACKAGES"
+        tools:node="remove" />
+
+</manifest>

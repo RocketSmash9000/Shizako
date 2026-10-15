@@ -54,7 +54,24 @@
     <fragment
         android:id="@+id/starter_fragment"
         android:name="moe.shizuku.manager.starter.StarterFragment"
-        android:label="starter" />
+        android:label="starter">
+        <!-- 启动参数必须在这里声明：Navigation 只会把已声明的 argument 送进来，
+             只靠 navigate(bundle) 传 EXTRA_* 在部分路径上会拿不到值，
+             手动指定端口（EXTRA_PORT）会因此退回默认 0 而失败。 -->
+        <argument
+            android:name="moe.shizuku.manager.extra.IS_ROOT"
+            android:defaultValue="true"
+            app:argType="boolean" />
+        <argument
+            android:name="moe.shizuku.manager.extra.HOST"
+            android:defaultValue="@null"
+            app:argType="string"
+            app:nullable="true" />
+        <argument
+            android:name="moe.shizuku.manager.extra.PORT"
+            android:defaultValue="0"
+            app:argType="integer" />
+    </fragment>
 
     <!-- 推荐应用（下载引导页：只给官方下载入口，不再做「注入」） -->
     <fragment

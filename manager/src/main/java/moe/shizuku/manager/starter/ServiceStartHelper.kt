@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import moe.shizuku.manager.R
 import moe.shizuku.manager.ShizukuSettings
@@ -118,24 +119,35 @@ object ServiceStartHelper {
                     }
                 }
 
-                if (Settings.Global.getInt(cr, "adb_wifi_enabled", 0) != 1) {
-                    return@launch
+                var port = -1
+
+                if (Settings.Global.getInt(cr, "adb_wifi_enabled", 0) == 1) {
+                    // ③ mDNS 找无线调试端口 → 交给 AdbStarter 连接并启动
+                    // （TCP 模式下它顺手把端口切到 5555 并关掉无线调试）
+                    val discovered = CompletableDeferred<Int>()
+                    val adbMdns = AdbMdns(appContext, AdbMdns.TLS_CONNECT) { p ->
+                        if (p > 0) discovered.complete(p)
+                    }
+                    adbMdns.start()
+                    port = try {
+                        withTimeout(3_000L) { discovered.await() }
+                    } catch (_: TimeoutCancellationException) {
+                        -1
+                    } finally {
+                        adbMdns.stop()
+                    }
                 }
 
-                // ③ mDNS 找无线调试端口 → 交给 AdbStarter 连接并启动
-                // （TCP 模式下它顺手把端口切到 5555 并关掉无线调试）
-                val discovered = CompletableDeferred<Int>()
-                val adbMdns = AdbMdns(appContext, AdbMdns.TLS_CONNECT) { port ->
-                    if (port > 0) discovered.complete(port)
+                // ④ mDNS 没结果时的兜底：本机已经有一个活着的 ADB TCP 端口就直接连它。
+                //
+                //    mDNS 走组播，任何「防泄漏」策略都能把它掐掉 —— GrapheneOS 开着 VPN 时
+                //    组播不会进 App，华为 / 鸿蒙部分机型同样拦；系统不给 WRITE_SECURE_SETTINGS
+                //    时无线调试也开不起来。以前这几种情况都是静默 return（点了没反应），
+                //    现在至少还能连上 adbd 已经监听的端口。
+                if (port <= 0) {
+                    port = resolveLivePort()
                 }
-                adbMdns.start()
-                val port = try {
-                    withTimeout(3_000L) { discovered.await() }
-                } catch (_: TimeoutCancellationException) {
-                    -1
-                } finally {
-                    adbMdns.stop()
-                }
+
                 if (port > 0) {
                     try {
                         AdbStarter.start("127.0.0.1", port, appContext)
@@ -148,6 +160,16 @@ object ServiceStartHelper {
                 onFinished?.invoke()
             }
         }
+    }
+
+    /**
+     * 找一个「已经活着」的 ADB TCP 端口。
+     *
+     * [EnvironmentUtils.getLiveAdbTcpPort] 是阻塞式 socket 探测（每个候选端口最多 250ms），
+     * 必须在 IO 线程调用，所以这里显式切到 [Dispatchers.IO]。
+     */
+    private suspend fun resolveLivePort(): Int = withContext(Dispatchers.IO) {
+        runCatching { EnvironmentUtils.getLiveAdbTcpPort() }.getOrDefault(-1)
     }
 
     /** 密钥还没被 adbd 信任时的统一提示（设备上可能有确认框，或需要重新配对）。 */

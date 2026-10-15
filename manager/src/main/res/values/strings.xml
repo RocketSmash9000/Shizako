@@ -57,10 +57,13 @@
 Note, do not disable \"Developer options\" or \"USB debugging\", or Shizako will be stopped."</string>
     <string name="dialog_adb_discovery_message_toggle_wireless_debugging">Please try to disable and enable \"Wireless debugging\" if it keeps searching.</string>
     <string name="dialog_adb_port">Port</string>
+    <string name="dialog_adb_port_auto_filled">Detected automatically. Change it if your device shows a different port.</string>
+    <string name="dialog_adb_port_manual_hint">Type the pairing port shown on your device\'s wireless debugging screen.</string>
     <string name="dialog_adb_invalid_port">Port is an integer ranging from 1 to 65535.</string>
     <string name="adb_pairing">Pairing</string>
     <string name="dialog_adb_pairing_title">Pair with device</string>
     <string name="dialog_adb_pairing_discovery">Searching for pairing service</string>
+    <string name="dialog_adb_pairing_manual_title">Enter the pairing port</string>
     <string name="dialog_adb_pairing_paring_code">Pairing code</string>
     <string name="paring_code_is_wrong">Pairing code is wrong.</string>
     <string name="cannot_connect_port">Can\'t connect to wireless debugging service.</string>
@@ -68,6 +71,7 @@ Note, do not disable \"Developer options\" or \"USB debugging\", or Shizako will
     <string name="dialog_adb_pairing_message">Please start paring by the following steps: \"Developer Options\" - \"Wireless debugging\" - \"Pairing device using pairing code\".\n\nAfter the pairing process starts, you will able to input the pairing code.</string>
     <string name="adb_pairing_requires_multi_window">Please enter split-screen (multi-window) mode first.</string>
     <string name="adb_pairing_requires_multi_window_reason">The system requires the pairing dialog always visible, using split-screen mode is the only way to let this app and system dialog visible at the same time.</string>
+    <string name="dialog_adb_pairing_mdns_timeout">Pairing service not found. mDNS multicast is probably blocked by the system, a VPN or a firewall — this happens on GrapheneOS with a VPN enabled and on some Huawei / HarmonyOS devices. Enter the port manually; you can find it on the wireless debugging screen.</string>
     <string name="adb_error_key_store">Unable to generate key for wireless debugging.\nThis may be because KeyStore mechanism of this device is broken.</string>
     <string name="adb_pair_required">Please go through the pairing step first.</string>
     <string name="development_settings">Developer options</string>
@@ -367,6 +371,11 @@ The export function uses SAF (Storage Access Framework). It's reported that MIUI
     <string name="activation_toast_starting">Starting Shizako service\u2026</string>
     <string name="activation_toast_pairing_forgotten">Pairing data cleared</string>
     <string name="activation_wadb_action_open_settings">Open Developer options</string>
+    <string name="activation_wadb_action_manual">Connect to a port manually</string>
+    <string name="activation_wadb_manual_title">Connect to a port</string>
+    <string name="activation_wadb_manual_message">Connect straight to an ADB port on this device, without pairing or service discovery. Use it when the pairing service cannot be found (mDNS multicast blocked by the system or a VPN — common on GrapheneOS with a VPN on, and on some Huawei / HarmonyOS devices), or when adbd already listens on a fixed port.</string>
+    <string name="activation_wadb_manual_action">Connect</string>
+    <string name="activation_wadb_manual_hint">Port %1$d is the usual ADB-over-TCP port. Use the port shown on your device\'s wireless debugging screen if it differs.</string>
     <string name="activation_adb_desc_detail">If you have a computer at hand, run the start command once with USB debugging enabled.</string>
     <string name="activation_adb_steps">1. Enable USB debugging in Developer options and connect the computer\n2. Copy the command below and run it in a terminal (adb)\n3. The service starts immediately; no root needed</string>
     <string name="activation_adb_action_copy">Copy command</string>

@@ -21,12 +21,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,6 +49,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -104,6 +107,8 @@ fun ActivationScreen(
     onStartRoot: () -> Unit,
     onStartPairing: () -> Unit,
     onStartAdbPaired: () -> Unit,
+    /** 手动指定端口直连（mDNS 被系统/VPN 拦、或 ADB 已经开在固定端口时用） */
+    onManualConnect: (Int) -> Unit,
     onForgetPairing: () -> Unit,
     onOpenDevelopmentSettings: () -> Unit,
     onCopyAdbCommand: () -> Unit,
@@ -137,6 +142,9 @@ fun ActivationScreen(
             (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && (activity.display?.displayId ?: -1) > 0)
         )
     var showPairDialog by remember { mutableStateOf(false) }
+    // 手动指定端口直连：mDNS 发现不到（GrapheneOS 开 VPN / 华为鸿蒙拦组播）、
+    // 或者 adbd 已经开在固定端口时的另一条路
+    var showManualPortDialog by remember { mutableStateOf(false) }
     LaunchedEffect(state.serviceMode, state.serviceRunning) {
         if (!tcpPromptShown &&
             state.serviceMode == ServiceMode.ADB &&
@@ -255,6 +263,14 @@ fun ActivationScreen(
                         text = stringResource(R.string.activation_wadb_action_open_settings),
                         enabled = !state.serviceRunning,
                         onClick = onOpenDevelopmentSettings,
+                    )
+                    // 自己指定端口直连：自动发现失败时唯一的出路，也是「adbd 已经开在
+                    // 5555」时最快的激活方式（配对对话框只解决配对，解决不了发现）
+                    HintSecondaryButton(
+                        palette = palette,
+                        text = stringResource(R.string.activation_wadb_action_manual),
+                        enabled = !state.serviceRunning,
+                        onClick = { showManualPortDialog = true },
                     )
                     if (state.isMiui) {
                         Text(
@@ -403,6 +419,114 @@ fun ActivationScreen(
             },
         )
     }
+
+    // 手动指定端口直连
+    if (showManualPortDialog) {
+        ManualConnectDialog(
+            palette = palette,
+            onDismiss = { showManualPortDialog = false },
+            onConnect = { port ->
+                showManualPortDialog = false
+                onManualConnect(port)
+            },
+        )
+    }
+}
+
+/**
+ * 「手动连接」端口输入弹窗。
+ *
+ * 老实现在 zako2.12 重构底栏时被删过一轮（[moe.shizuku.manager.starter.StarterFragment]
+ * 里 startAdb(host, port) 一度没有调用方），导致 mDNS 发现不到端口的机器彻底没路走。
+ * 这里保留入口：不依赖配对、不依赖 mDNS，直接把本机某个 ADB TCP 端口连上。
+ * 典型场景是 adbd 已经开在 5555（`adb tcpip 5555` 过），或者设备本身就监听固定端口。
+ */
+@Composable
+private fun ManualConnectDialog(
+    palette: HintPalette,
+    onDismiss: () -> Unit,
+    onConnect: (Int) -> Unit,
+) {
+    val context = LocalContext.current
+
+    // 预填优先级：已经在监听的端口 > 系统属性里配的端口 > 5555
+    val defaultPort = remember {
+        runCatching {
+            EnvironmentUtils.getLiveAdbTcpPort().takeIf { it > 0 }
+                ?: EnvironmentUtils.getAdbTcpPort().takeIf { it > 0 }
+                ?: AdbStarter.TCP_MODE_PORT
+        }.getOrDefault(AdbStarter.TCP_MODE_PORT)
+    }
+
+    var portText by remember { mutableStateOf(defaultPort.toString()) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                painter = painterResource(R.drawable.ic_wireless_adb_24dp),
+                contentDescription = null,
+                tint = palette.accent,
+            )
+        },
+        title = {
+            Text(
+                text = stringResource(R.string.activation_wadb_manual_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = palette.onCard,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = stringResource(R.string.activation_wadb_manual_message),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = palette.variant,
+                )
+                OutlinedTextField(
+                    value = portText,
+                    onValueChange = {
+                        portText = it.filter(Char::isDigit).take(5)
+                        error = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(R.string.dialog_adb_port)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    isError = error != null,
+                    supportingText = {
+                        Text(
+                            error ?: stringResource(
+                                R.string.activation_wadb_manual_hint,
+                                AdbStarter.TCP_MODE_PORT,
+                            )
+                        )
+                    },
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val port = portText.toIntOrNull() ?: -1
+                    if (port !in 1..65535) {
+                        error = context.getString(R.string.dialog_adb_invalid_port)
+                        return@Button
+                    }
+                    onConnect(port)
+                },
+            ) {
+                Text(stringResource(R.string.activation_wadb_manual_action))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    )
 }
 
 /** 「启用持久 TCP 模式？」弹窗（照搬 Shevery 的 tcp_prompt_dialog 设计 + 本项目配色）。 */

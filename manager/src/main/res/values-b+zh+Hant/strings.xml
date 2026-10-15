@@ -65,6 +65,8 @@
     <string name="settings_translation_summary">協助我們將 %s 翻譯至您的語言</string>
     <string name="dialog_stop_message">Shizako 服務將被停止。</string>
     <string name="dialog_adb_port">通訊埠</string>
+    <string name="dialog_adb_port_auto_filled">已自動偵測到通訊埠。若與裝置上顯示的通訊埠不同，請手動修改。</string>
+    <string name="dialog_adb_port_manual_hint">請依裝置「無線偵錯」頁面顯示的配對通訊埠手動填寫。</string>
     <string name="dialog_adb_invalid_port">通訊埠是一個 1 至 65535 的整數。</string>
     <string name="dialog_adb_pairing_paring_code">配對碼</string>
     <string name="home_wireless_adb_title">透過無線偵錯啟動</string>
@@ -81,6 +83,7 @@
     <string name="starter">啟動器</string>
     <string name="dialog_adb_discovery">正在尋找無線偵錯服務</string>
     <string name="dialog_adb_pairing_discovery">正在尋找配對服務</string>
+    <string name="dialog_adb_pairing_manual_title">請輸入配對通訊埠</string>
     <string name="dialog_adb_discovery_message">"請在「開發人員選項」中啟用「無線偵錯」功能。在切換網路時，「無線偵錯」會自動停用。 
  
 注意：請不要停用「開發人員選項」或「USB 偵錯」，否則 Shizako 會被停止。"</string>
@@ -91,6 +94,7 @@
 \n
 \n配對過程開始後，您將能夠輸入配對碼。</string>
     <string name="adb_pairing_requires_multi_window_reason">系統要求配對對話方塊始終可見，使用「分割畫面」模式是使此應用程式和系統對話方塊同時可見的唯一方法。</string>
+    <string name="dialog_adb_pairing_mdns_timeout">未搜尋到配對服務。mDNS 群播很可能被系統、VPN 或防火牆攔截——GrapheneOS 開啟 VPN 時以及部分華為 / 鴻蒙機型都會如此。請手動填寫配對通訊埠，通訊埠編號請見裝置「無線偵錯」頁面。</string>
     <string name="development_settings">開發人員選項</string>
     <string name="home_root_description_sui">如果您正在使用 Magisk，可以嘗試 %1$s。對於 Root 使用者，它將最終取代 Shizako。注意，已有的應用程式需要一點點修改來使用 %2$s。</string>
     <string name="settings_start_on_boot_summary">對於已 Root 裝置，Shizako 可以在開機時自動啟動</string>
@@ -194,6 +198,11 @@
     <string name="activation_wadb_steps">1. 點下方「開始配對」，依提示允許通知\n2. 在開啟的開發人員選項裡開啟「無線偵錯」\n3. 點「使用配對碼配對裝置」，畫面上會顯示 6 位數配對碼\n4. 下拉通知列，在通知裡輸入配對碼；配對、連線、啟動全自動完成</string>
     <string name="activation_wadb_action_pair">開始配對</string>
     <string name="activation_wadb_action_open_settings">開啟開發人員選項</string>
+    <string name="activation_wadb_action_manual">手動連接通訊埠</string>
+    <string name="activation_wadb_manual_title">連線至指定通訊埠</string>
+    <string name="activation_wadb_manual_message">略過配對與服務探索，直接連線本機上的 ADB 通訊埠。適用於找不到配對服務的情況（mDNS 群播被系統或 VPN 攔截，GrapheneOS 開啟 VPN 與部分華為 / 鴻蒙機型常見），也適用於 adbd 已監聽固定通訊埠的裝置。</string>
+    <string name="activation_wadb_manual_action">連線</string>
+    <string name="activation_wadb_manual_hint">%1$d 是 ADB over TCP 的常用通訊埠。若裝置上顯示的通訊埠不同，請依裝置「無線偵錯」頁面上的通訊埠填寫。</string>
     <string name="activation_adb_desc_detail">手邊有電腦的話，開啟 USB 偵錯後執行一次啟動指令即可。</string>
     <string name="activation_adb_steps">1. 在開發人員選項中開啟 USB 偵錯並連接電腦\n2. 複製下面的指令，在電腦終端機（adb）裡執行\n3. 服務立即啟動，無需 Root</string>
     <string name="activation_adb_action_copy">複製指令</string>

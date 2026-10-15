@@ -70,6 +70,10 @@ object StubManager {
     private const val CHANNEL_ROOT = "root"
     private const val CHANNEL_ADB = "ADB"
 
+    /** 通道自称成功、但轮询发现目标状态没达成时的说辞 */
+    private const val INSTALL_HINT = "命令返回成功，但系统里查不到安装结果"
+    private const val UNINSTALL_HINT = "命令返回成功，但系统里还看得到占位包"
+
     /** 远端 sh 脚本：整个脚本只写一次，sh 只 fork 一次，安装能吃满 CPU */
     private const val PM_INSTALL_SCRIPT = "cat > $REMOTE_TMP_PATH && pm install -r -d -t $REMOTE_TMP_PATH; rm -f $REMOTE_TMP_PATH"
 
@@ -114,27 +118,29 @@ object StubManager {
         // 私有目录里的明文 APK：server / root 两条通道直接用它，省一次解压
         val privateApk = writeToPrivateStorage(context, apkBytes)
 
-        var last: Result? = null
+        // 三条通道的错误**全部**收集：以前只留最后一条，root 通道正常时报出去的是 ADB 的
+        // 错（比如「ADB 没开」），用户拿着完全不相干的报错去排查，等于没报。
+        val failures = mutableListOf<String>()
 
         val server = runViaServer(apkBytes)
         if (server.ok && pollInstalled(context, wantInstalled = true)) {
             return@withContext server
         }
-        if (server.error != null) last = server
+        failureText(server, isInstalled(context), INSTALL_HINT)?.let(failures::add)
 
         val root = runViaRoot(privateApk?.absolutePath)
         if (root.ok && pollInstalled(context, wantInstalled = true)) {
             return@withContext root
         }
-        if (root.error != null) last = root
+        failureText(root, isInstalled(context), INSTALL_HINT)?.let(failures::add)
 
         val adb = runViaAdb(context, apkBytes)
         if (adb.ok && pollInstalled(context, wantInstalled = true)) {
             return@withContext adb
         }
-        if (adb.error != null) last = adb
+        failureText(adb, isInstalled(context), INSTALL_HINT)?.let(failures::add)
 
-        last ?: Result(false, CHANNEL_NONE, "命令执行了但系统里查不到安装结果，请稍后重试")
+        Result(false, CHANNEL_NONE, failures.joinToString("\n"))
     }
 
     suspend fun uninstall(context: Context): Result = withContext(Dispatchers.IO) {
@@ -143,21 +149,21 @@ object StubManager {
         }
         if (!isInstalled(context)) return@withContext Result(true, CHANNEL_NONE)
 
-        var last: Result? = null
+        val failures = mutableListOf<String>()
 
         val server = runViaServer(null, PM_UNINSTALL)
         if (server.ok && pollInstalled(context, wantInstalled = false)) return@withContext server
-        if (server.error != null) last = server
+        failureText(server, !isInstalled(context), UNINSTALL_HINT)?.let(failures::add)
 
         val root = runViaRoot(null, PM_UNINSTALL)
         if (root.ok && pollInstalled(context, wantInstalled = false)) return@withContext root
-        if (root.error != null) last = root
+        failureText(root, !isInstalled(context), UNINSTALL_HINT)?.let(failures::add)
 
         val adb = runViaAdb(context, null, PM_UNINSTALL)
         if (adb.ok && pollInstalled(context, wantInstalled = false)) return@withContext adb
-        if (adb.error != null) last = adb
+        failureText(adb, !isInstalled(context), UNINSTALL_HINT)?.let(failures::add)
 
-        last ?: Result(false, CHANNEL_NONE, "命令执行了但系统里还看得到占位包，请稍后重试")
+        Result(false, CHANNEL_NONE, failures.joinToString("\n"))
     }
 
     // ══════════ 三条通道 ══════════
@@ -432,5 +438,18 @@ object StubManager {
             delay(200L)
         }
         return isInstalled(context) == wantInstalled
+    }
+
+    /**
+     * 一条通道失败的说明文案，形如「root：没有 root」。
+     *
+     * 目标状态已经达成（比如前一条通道其实已经装上了）时返回 null，由调用方跳过 —— 
+     * 这种情况下报错没有意义，只会误导。
+     */
+    private fun failureText(result: Result, targetReached: Boolean, fallback: String): String? = when {
+        targetReached -> null
+        result.error != null -> "${result.channel}：${result.error}"
+        result.ok -> "${result.channel}：$fallback"
+        else -> "${result.channel}：命令执行失败"
     }
 }

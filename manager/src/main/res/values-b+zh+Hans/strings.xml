@@ -155,6 +155,11 @@
     <string name="activation_toast_starting">正在启动 Shizako 服务…</string>
     <string name="activation_toast_pairing_forgotten">配对信息已经清掉啦</string>
     <string name="activation_wadb_action_open_settings">打开开发者选项</string>
+    <string name="activation_wadb_action_manual">手动连接端口</string>
+    <string name="activation_wadb_manual_title">连接到指定端口</string>
+    <string name="activation_wadb_manual_message">跳过配对与服务发现，直接连接本机上的 ADB 端口。适用于搜不到配对服务的情况（mDNS 组播被系统或 VPN 拦截，GrapheneOS 开启 VPN 与部分华为 / 鸿蒙机型常见），也适用于 adbd 已经监听在固定端口的设备。</string>
+    <string name="activation_wadb_manual_action">连接</string>
+    <string name="activation_wadb_manual_hint">%1$d 是 ADB over TCP 的常用端口。若设备上显示的端口不同，请按设备「无线调试」页面上的端口填写。</string>
     <string name="activation_adb_desc_detail">手边有电脑的话，开启 USB 调试后执行一次启动命令即可。</string>
     <string name="activation_adb_steps">1. 在开发者选项中开启 USB 调试并连接电脑\n2. 复制下面的命令，在电脑终端（adb）里执行\n3. 服务立即启动，无需 Root</string>
     <string name="activation_adb_action_copy">复制命令</string>
@@ -259,6 +264,8 @@
 
     <string name="settings_translation_summary">帮助我们将 %s 翻译至您的语言</string>
     <string name="dialog_adb_port">端口号</string>
+    <string name="dialog_adb_port_auto_filled">已自动识别到端口。若与设备上显示的端口不同，请手动修改。</string>
+    <string name="dialog_adb_port_manual_hint">请按设备「无线调试」页面上显示的配对端口手动填写。</string>
     <string name="adb_pairing">狠狠地蹂躏调教</string>
     <string name="dialog_adb_pairing_title">与设备配对</string>
     <string name="dialog_adb_pairing_paring_code">配对码</string>
@@ -274,12 +281,14 @@
     <string name="adb_error_key_store">无法为无线调试生成密钥。\n这可能是因为此设备上的 KeyStore 机制已损坏。</string>
     <string name="adb_pair_required">请先进行配对步骤。</string>
     <string name="adb_pairing_requires_multi_window_reason">系统要求配对对话框始终可见，使用分屏模式是使此应用和系统对话框同时可见的唯一方法。</string>
+    <string name="dialog_adb_pairing_mdns_timeout">未搜索到配对服务。mDNS 组播很可能被系统、VPN 或防火墙拦截——GrapheneOS 开启 VPN 时以及部分华为 / 鸿蒙机型都会这样。请手动填写配对端口，端口号见设备「无线调试」页面。</string>
     <string name="dialog_adb_discovery">正在搜索无线调试服务</string>
     <string name="dialog_adb_discovery_message">"请在"开发者选项"中启用"无线调试"功能。当网络变化时"无线调试"会被自动禁用。 
  
 注意：请不要禁用"开发者选项"或"USB 调试"，否则 Shizako酱 会被拦在外面。"</string>
     <string name="dialog_adb_discovery_message_toggle_wireless_debugging">如果一直搜索，请尝试禁用并启用"无线调试"。</string>
     <string name="dialog_adb_pairing_discovery">正在搜索配对服务</string>
+    <string name="dialog_adb_pairing_manual_title">请输入配对端口</string>
     <string name="dialog_wireless_adb_not_enabled">无线调试未启用。
 \n请注意，在 Android 11 之前，要启用无线调试必须连接电脑。</string>
     <string name="dialog_adb_pairing_message">请跟随下面的步骤开始配对："开发者选项" - "无线调试" - "使用配对码配对设备"。

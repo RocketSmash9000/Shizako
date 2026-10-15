@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import moe.shizuku.manager.R
@@ -59,7 +61,12 @@ import java.net.ConnectException
  *
  * 现代 Android 要求「使用配对码配对设备」的系统对话框在配对期间保持可见，
  * 所以正确姿势是分屏：左边 Shizako、右边系统配对对话框，两者同屏 ——
- * 这里自动发现配对端口（也可手输），输入 6 位配对码后直连 127.0.0.1 完成配对。
+ * 这里自动发现配对端口，输入 6 位配对码后直连 127.0.0.1 完成配对。
+ *
+ * 端口**任何时候都能手输**（不只是自动发现之后）：mDNS 用的是组播，GrapheneOS 开着 VPN
+ * 时组播不会送进 App，华为 / 鸿蒙部分机型同样拦 —— 这类设备上自动发现必然失败，
+ * 以前对话框会一直转圈、连输入框都不渲染，用户只能干看着。现在自动发现只负责「预填」，
+ * 6 秒没结果就转为手动输入引导。
  */
 @RequiresApi(Build.VERSION_CODES.R)
 @Composable
@@ -77,20 +84,58 @@ fun AdbPairDialog(
     var portError by remember { mutableStateOf<String?>(null) }
     var pairingCodeError by remember { mutableStateOf<String?>(null) }
     var isPairing by remember { mutableStateOf(false) }
+    /** mDNS 是否还在搜索。只影响文案与转圈：端口框**任何情况下**都能手输。 */
+    var scanning by remember { mutableStateOf(false) }
+    /**
+     * 搜索超时（mDNS 一直没回报端口）。
+     *
+     * 这时不能再让用户对着转圈干等：mDNS 用的是组播，任何「防泄漏」策略都可能把它掐掉 ——
+     * GrapheneOS 开着 VPN 时组播不会送进 App，华为/鸿蒙部分机型同样拦。
+     * 这些设备上唯一的出路就是手输端口，所以超时后要明确引导。
+     */
+    var scanTimedOut by remember { mutableStateOf(false) }
+
+    /** 跳系统「开发者选项」：手输端口时要照着设备上「无线调试」页显示的端口填。 */
+    fun openDeveloperSettings() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra(":settings:fragment_args_key", "toggle_adb_wireless")
+        }
+        try {
+            context.startActivity(intent)
+        } catch (_: ActivityNotFoundException) {
+        }
+    }
 
     // 只有在配对窗口（分屏/多窗口）里才启动 mDNS 搜索并自动回填端口
     DisposableEffect(inPairingWindow) {
         if (!inPairingWindow) return@DisposableEffect onDispose { }
+        scanning = true
+        scanTimedOut = false
+        discoveredPort = -1
         val adbMdns = AdbMdns(context, AdbMdns.TLS_PAIRING) { port ->
             discoveredPort = port
             if (port in 1..65535) {
                 portText = port.toString()
                 portError = null
+                scanning = false
+                scanTimedOut = false
             }
         }
         adbMdns.start()
         onDispose {
+            scanning = false
             adbMdns.stop()
+        }
+    }
+
+    // 搜索计时：6 秒还没结果就认定 mDNS 被拦，切到「手动输入」的引导文案
+    LaunchedEffect(inPairingWindow, discoveredPort, scanTimedOut) {
+        if (!inPairingWindow || discoveredPort in 1..65535 || scanTimedOut) return@LaunchedEffect
+        delay(6_000L)
+        if (discoveredPort !in 1..65535) {
+            scanning = false
+            scanTimedOut = true
         }
     }
 
@@ -107,8 +152,10 @@ fun AdbPairDialog(
             Text(
                 text = when {
                     !inPairingWindow -> stringResource(R.string.adb_pairing_requires_multi_window)
-                    discoveredPort !in 1..65535 -> stringResource(R.string.dialog_adb_pairing_discovery)
-                    else -> stringResource(R.string.dialog_adb_pairing_title)
+                    discoveredPort in 1..65535 -> stringResource(R.string.dialog_adb_pairing_title)
+                    scanning -> stringResource(R.string.dialog_adb_pairing_discovery)
+                    // 搜索超时 / 失败：不再卡住，标题直接告诉用户可以手输
+                    else -> stringResource(R.string.dialog_adb_pairing_manual_title)
                 },
                 style = MaterialTheme.typography.titleLarge,
                 color = palette.onCard,
@@ -116,20 +163,75 @@ fun AdbPairDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                when {
-                    !inPairingWindow -> {
+                if (!inPairingWindow) {
+                    Text(
+                        text = stringResource(R.string.adb_pairing_requires_multi_window_reason),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = palette.variant,
+                    )
+                } else {
+                    // 搜索中：给个转圈 + 步骤说明，但下面照样能立刻手输
+                    if (scanning && discoveredPort !in 1..65535) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            CircularProgressIndicator(
+                                color = palette.accent,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Text(
+                                text = stringResource(R.string.dialog_adb_pairing_message),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = palette.onCard,
+                            )
+                        }
+                    }
+                    // 超时/失败：解释 mDNS 为什么发现不到，下面照样能手输
+                    if (scanTimedOut) {
                         Text(
-                            text = stringResource(R.string.adb_pairing_requires_multi_window_reason),
+                            text = stringResource(R.string.dialog_adb_pairing_mdns_timeout),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = palette.variant,
+                            color = palette.error,
                         )
                     }
-                    discoveredPort !in 1..65535 -> {
-                        Text(
-                            text = stringResource(R.string.dialog_adb_pairing_message),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = palette.onCard,
-                        )
+                    OutlinedTextField(
+                        value = pairingCode,
+                        onValueChange = {
+                            pairingCode = it.filter(Char::isDigit).take(6)
+                            pairingCodeError = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.dialog_adb_pairing_paring_code)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        isError = pairingCodeError != null,
+                        supportingText = pairingCodeError?.let { error ->
+                            { Text(error) }
+                        },
+                    )
+                    OutlinedTextField(
+                        value = portText,
+                        onValueChange = {
+                            portText = it.filter(Char::isDigit).take(5)
+                            portError = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.dialog_adb_port)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        isError = portError != null,
+                        supportingText = {
+                            Text(
+                                portError ?: if (discoveredPort in 1..65535) {
+                                    stringResource(R.string.dialog_adb_port_auto_filled)
+                                } else {
+                                    stringResource(R.string.dialog_adb_port_manual_hint)
+                                }
+                            )
+                        },
+                    )
+                    if (isPairing) {
                         CircularProgressIndicator(
                             color = palette.accent,
                             modifier = Modifier
@@ -137,136 +239,83 @@ fun AdbPairDialog(
                                 .align(Alignment.CenterHorizontally),
                         )
                     }
-                    else -> {
-                        OutlinedTextField(
-                            value = pairingCode,
-                            onValueChange = {
-                                pairingCode = it.filter(Char::isDigit).take(6)
-                                pairingCodeError = null
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text(stringResource(R.string.dialog_adb_pairing_paring_code)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            isError = pairingCodeError != null,
-                            supportingText = pairingCodeError?.let { error ->
-                                { Text(error) }
-                            },
-                        )
-                        OutlinedTextField(
-                            value = portText,
-                            onValueChange = {
-                                portText = it.filter(Char::isDigit).take(5)
-                                portError = null
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text(stringResource(R.string.dialog_adb_port)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            isError = portError != null,
-                            supportingText = portError?.let { error ->
-                                { Text(error) }
-                            },
-                        )
-                        if (isPairing) {
-                            CircularProgressIndicator(
-                                color = palette.accent,
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .align(Alignment.CenterHorizontally),
-                            )
-                        }
-                    }
                 }
             }
         },
         confirmButton = {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                when {
-                    !inPairingWindow -> {
-                        Button(onClick = onDismissRequest) {
-                            Text(stringResource(android.R.string.ok))
-                        }
-                    }
-                    discoveredPort !in 1..65535 -> {
-                        Button(
-                            onClick = {
-                                val intent = Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                    putExtra(":settings:fragment_args_key", "toggle_adb_wireless")
-                                }
-                                try {
-                                    context.startActivity(intent)
-                                } catch (_: ActivityNotFoundException) {
-                                }
-                            },
-                        ) {
+            if (!inPairingWindow) {
+                Button(onClick = onDismissRequest) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            } else {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // 端口没被自动发现：给一条去「开发者选项」看端口号的路
+                    if (discoveredPort !in 1..65535) {
+                        TextButton(onClick = { openDeveloperSettings() }) {
                             Text(stringResource(R.string.activation_wadb_action_open_settings))
                         }
                     }
-                    else -> {
-                        Button(
-                            enabled = !isPairing && pairingCode.length == 6 && portText.isNotBlank(),
-                            onClick = {
-                                val port = portText.toIntOrNull() ?: -1
-                                if (port !in 1..65535) {
-                                    portError = context.getString(R.string.dialog_adb_invalid_port)
-                                    return@Button
-                                }
-                                isPairing = true
-                                scope.launch(Dispatchers.IO) {
-                                    val host = "127.0.0.1"
-                                    val key = try {
-                                        AdbKey(PreferenceAdbKeyStore(ShizukuSettings.getPreferences()), "shizuku")
-                                    } catch (e: Throwable) {
-                                        withContext(Dispatchers.Main) {
-                                            isPairing = false
-                                            Toast.makeText(
-                                                context,
-                                                context.getString(R.string.adb_error_key_store),
-                                                Toast.LENGTH_LONG,
-                                            ).apply { setGravity(Gravity.CENTER, 0, 0) }.show()
-                                        }
-                                        return@launch
-                                    }
-                                    val result = runCatching {
-                                        AdbPairingClient(host, port, pairingCode, key).start()
-                                    }
+                    Button(
+                        enabled = !isPairing && pairingCode.length == 6 && portText.isNotBlank(),
+                        onClick = {
+                            val port = portText.toIntOrNull() ?: -1
+                            if (port !in 1..65535) {
+                                portError = context.getString(R.string.dialog_adb_invalid_port)
+                                return@Button
+                            }
+                            isPairing = true
+                            scope.launch(Dispatchers.IO) {
+                                val host = "127.0.0.1"
+                                val key = try {
+                                    AdbKey(PreferenceAdbKeyStore(ShizukuSettings.getPreferences()), "shizuku")
+                                } catch (e: Throwable) {
                                     withContext(Dispatchers.Main) {
                                         isPairing = false
-                                        result.onSuccess { success ->
-                                            if (success) {
-                                                onPairSuccess()
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.adb_error_key_store),
+                                            Toast.LENGTH_LONG,
+                                        ).apply { setGravity(Gravity.CENTER, 0, 0) }.show()
+                                    }
+                                    return@launch
+                                }
+                                val result = runCatching {
+                                    AdbPairingClient(host, port, pairingCode, key).start()
+                                }
+                                withContext(Dispatchers.Main) {
+                                    isPairing = false
+                                    result.onSuccess { success ->
+                                        if (success) {
+                                            onPairSuccess()
+                                        }
+                                    }.onFailure { err ->
+                                        when (err) {
+                                            is ConnectException -> {
+                                                portError = context.getString(R.string.cannot_connect_port)
                                             }
-                                        }.onFailure { err ->
-                                            when (err) {
-                                                is ConnectException -> {
-                                                    portError = context.getString(R.string.cannot_connect_port)
-                                                }
-                                                is AdbInvalidPairingCodeException -> {
-                                                    pairingCodeError = context.getString(R.string.paring_code_is_wrong)
-                                                }
-                                                is AdbKeyException -> {
-                                                    Toast.makeText(
-                                                        context,
-                                                        context.getString(R.string.adb_error_key_store),
-                                                        Toast.LENGTH_LONG,
-                                                    ).apply { setGravity(Gravity.CENTER, 0, 0) }.show()
-                                                }
-                                                else -> {
-                                                    portError = err.message ?: context.getString(R.string.cannot_connect_port)
-                                                }
+                                            is AdbInvalidPairingCodeException -> {
+                                                pairingCodeError = context.getString(R.string.paring_code_is_wrong)
+                                            }
+                                            is AdbKeyException -> {
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.adb_error_key_store),
+                                                    Toast.LENGTH_LONG,
+                                                ).apply { setGravity(Gravity.CENTER, 0, 0) }.show()
+                                            }
+                                            else -> {
+                                                portError = err.message ?: context.getString(R.string.cannot_connect_port)
                                             }
                                         }
                                     }
                                 }
-                            },
-                        ) {
-                            Text(stringResource(android.R.string.ok))
-                        }
+                            }
+                        },
+                    ) {
+                        Text(stringResource(android.R.string.ok))
                     }
                 }
             }

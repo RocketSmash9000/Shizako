@@ -94,6 +94,7 @@ class ActivationFragment : Fragment() {
                 onStartRoot = ::startWithRoot,
                 onStartPairing = ::startWirelessPairing,
                 onStartAdbPaired = ::startAdbWithPairing,
+                onManualConnect = ::connectManualPort,
                 onForgetPairing = ::forgetPairing,
                 onOpenDevelopmentSettings = ::openDevelopmentSettings,
                 onCopyAdbCommand = ::copyAdbCommand,
@@ -204,6 +205,26 @@ class ActivationFragment : Fragment() {
         findNavController().navigate(
             R.id.starter_fragment,
             bundleOf(StarterFragment.EXTRA_IS_ROOT to true),
+            moe.shizuku.manager.app.NavMotion.pageOptions(),
+        )
+    }
+
+    /**
+     * 手动指定端口直连。
+     *
+     * 绕开配对与 mDNS：只要本机某个 ADB TCP 端口上有 adbd 在听，直接连它把服务拉起来。
+     * mDNS 被系统或 VPN 拦掉的机器（GrapheneOS 开 VPN、华为/鸿蒙）靠这条兜底 ——
+     * 配对的问题解决的是「拿到密钥」，解决不了「发现不了端口」。
+     */
+    private fun connectManualPort(port: Int) {
+        if (port !in 1..65535) return
+        findNavController().navigate(
+            R.id.starter_fragment,
+            bundleOf(
+                StarterFragment.EXTRA_IS_ROOT to false,
+                StarterFragment.EXTRA_HOST to "127.0.0.1",
+                StarterFragment.EXTRA_PORT to port,
+            ),
             moe.shizuku.manager.app.NavMotion.pageOptions(),
         )
     }

@@ -1,8 +1,3 @@
-# F-Droid 元数据 recipe
-#
-# 放到 fdroiddata 仓库的 metadata/com.churan.shizako.yml 后提 MR。
-# 前置条件已全部满足（见同目录 README.md 与 变体方案.md 第六节）。
-
 Categories:
   - Development
   - System
@@ -12,7 +7,8 @@ AuthorEmail: q14779041201@gmail.com
 WebSite: https://cr1437.github.io/Shizako/
 SourceCode: https://github.com/cr1437/Shizako
 IssueTracker: https://github.com/cr1437/Shizako/issues
-Changelog: https://github.com/cr1437/Shizako/blob/main/%E6%9B%B4%E6%96%B0%E6%97%A5%E5%BF%97.md
+Changelog: 
+  https://github.com/cr1437/Shizako/blob/main/%E6%9B%B4%E6%96%B0%E6%97%A5%E5%BF%97.md
 
 AutoName: Shizako
 
@@ -20,45 +16,49 @@ RepoType: git
 Repo: https://github.com/cr1437/Shizako.git
 
 Builds:
-  # F-Droid 变体：-Pfdroid 开启后 versionName 自动带 -f 后缀，
-  # 与 GitHub 版（zako3.13）在同一个仓库、同一份源码里产出（见 tools/fdroid/变体方案.md）。
-  - versionName: zako3.13-f
-    versionCode: 313
-    # 模板要求：commit 必须是完整哈希，不能用 tag / 分支名。
-    # 该提交在 tag zako3.13 之后，包含：fastlane 元数据 + F-Droid 变体的合规改动
-    # （不声明上游 authority、不打包兼容性占位包、产物内不含上游 application id）；
-    # 版本号仍是 zako3.13 / 313，与下面的 versionName/versionCode 对应。
-    commit: 91605690f1334a7354677e1cb91232d545938f42
-    subdir: .
+  - versionName: zako3.15
+    versionCode: 315
+    commit: 41f3681db4b6e3ee2a2212e4419684cc14263fc3
+    subdir: manager
     gradle:
-      - :manager:assembleRelease
-      # 单独一项原样传给 gradle：开关变体（版本名 -f、关自更新/一键注入/AI/反代）
-      - -Pfdroid
-    output: manager/build/outputs/apk/release/shizako-zako3.13-f-release.apk
-    # 项目需要 NDK 参与构建（manager / shell / rish / starter 都有 JNI）
-    # 需要确认 F-Droid 构建机上存在这一版；否则要先降级到他们有的版本
+      - yes
+    prebuild:
+      - sed -i 's|mirrors.cloud.tencent.com/gradle/|services.gradle.org/distributions/|'
+        ../gradle/wrapper/gradle-wrapper.properties
+      - sed -i -e 's|maven.aliyun.com/repository/.*"|maven.google.com"|' ../settings.gradle
+      - sed -i -e '/signing.gradle/d' build.gradle
+      - sdkmanager 'cmake;3.31.0'
+    scanignore:
+      - shell/src/main/java/rikka/shizuku/shell/ShizukuShellLoader.java
     ndk: 29.0.14206865
-    # 依赖源：无需 sed —— settings.gradle 检测到 -Pfdroid 时自动关闭全部阿里云镜像、
-    # 改走官方 google()/mavenCentral()/gradlePluginPortal()（GitHub 版构建不受影响）。
-    #
-    # Gradle 发行包：仓库里的 wrapper 指向国内镜像 mirrors.cloud.tencent.com（为了国内
-    # 开发机下载快），这里改成官方 services.gradle.org —— 构建机的出网白名单不一定
-    # 覆盖国内镜像，用官方地址最稳（只在构建机上生效，不影响仓库与本地开发）。
-    prebuild: |
-      sed -i 's#mirrors\.cloud\.tencent\.com/gradle/#services.gradle.org/distributions/#g' gradle/wrapper/gradle-wrapper.properties
+    gradleprops:
+      - fdroid
 
 MaintainerNotes: |
-  上游为 Shizuku（Apache-2.0），本项目为其 fork，按上游许可声明使用自有 app id 与权限名：
-  com.churan.shizako / com.churan.shizako.permission.API_V23。
-  由于内置兼容桥占用了官方 provider authority（moe.shizuku.privileged.api.shizuku），
-  本应用与官方 Shizuku 不能同时安装 —— 这是刻意设计，已在 README 中说明。
+  Shizako is an Apache-2.0 fork of Shizuku (RikkaApps/Shizuku) that keeps its own app
+  name, its own application id (com.churan.shizako) and its own permission names. It
+  cannot be installed next to the official Shizuku because the compatibility bridge
+  answers the upstream provider authority; that bridge is not part of this build.
+
+  The variant switch is the in-repo Gradle property `-Pfdroid`, passed via `gradleprops`.
+  It makes versionName carry a `-f` suffix (versionCode is unchanged), turns off the
+  in-app updater and update checks, removes the one-click third-party APK installation
+  and the AI explain feature, stops building and packaging the compatibility placeholder
+  package (the `stub` module is not included, so no APK using the upstream application
+  id is produced), declares only our own provider authority, and switches the Gradle and
+  Maven repositories to the official ones. fdroidserver's build.py compares versionCode
+  only, so the `-f` suffix is not repeated in `versionName` above; F-Droid's own
+  AutoUpdateMode: Version writes the bare version name as well.
+
+  The `rikka.shizuku.*` strings left in the DEX (protocol keys such as
+  `moe.shizuku.privileged.api.intent.extra.BINDER`, the `moe.shizuku.server.*` AIDL
+  descriptors and `ShizukuProvider.MANAGER_APPLICATION_ID`) come from the vendored
+  shizuku-api sources (MIT, api/LICENSE) and are interop constants - not an application
+  id, a permission or the app name. `shell/.../ShizukuShellLoader.java` is scanignored
+  because the rish dex it loads is compiled from source in-tree during this build.
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-# 版本 tag 形如 zako3.13 / zako3.01-hp
-# 注意：UpdateCheckData 的 versionName 正则取自根 build.gradle（基名，不含 -f 后缀，
-# 后缀是构建参数拼出来的）；更新判断以 versionCode（313，须逐发递增）为准。
-# 若 MR 时 linter 报 CurrentVersion 与提取值不一致，再把 -f 后缀下沉进根 versionName。
 UpdateCheckData: build.gradle|versionCode = (\d+)|.|versionName = "([^"]+)"
-CurrentVersion: zako3.13-f
-CurrentVersionCode: 313
+CurrentVersion: zako3.15
+CurrentVersionCode: 315

@@ -25,6 +25,29 @@
 > fork 侧 failed 是环境噪声。
 > 现在等 review；第 4 节列了可能被追问的点。
 
+> ## 现状（截至 2026-10-16，zako3.15）
+>
+> - reviewer **linsui 亲手试用后报了两个问题**：配对配不上；配对失败之后仍显示「已配对」。
+>   两者都是本项目自己的 bug，已在 **zako3.15** 修掉，回复见 MR 的
+>   [note 4023333516](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/50819#note_4023333516)。
+> - recipe 原本 pin 在 `1f1c4f33`（versionCode 313）—— 比 3.13 的三个修复还早，
+>   照它构建出来的 F-Droid 包正好带着 reviewer 碰到的那批 bug。pin 已前移到
+>   `41f3681`（versionCode **315**），并补写了 `MaintainerNotes`。
+> - `tools/fdroid/com.churan.shizako.yml` 现在**与 MR 里的文件逐字一致**（按
+>   `fdroid rewritemeta` 规范化，无注释），可直接整份覆盖到 fdroiddata 的 `metadata/`。
+> - recipe 用 `gradleprops: [fdroid]` 传 `-Pfdroid`。pin 的提交必须能带这个开关构建；
+>   本机验证要挂代理，因为该开关会关掉国内镜像、改走官方源：
+>
+>   ```
+>   GRADLE_OPTS="-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7890" \
+>     ./gradlew :manager:assembleRelease -Pfdroid --no-daemon
+>   ```
+> - 待办：等 linsui 在 fdroiddata 侧再触发一次流水线（fork 侧流水线一向无作业、直接 failed）；
+>   可复现构建（RBS）尚未开启，需要维护者给签名指纹方面的指导。
+> - GitLab 通道：`gitlab.com` 的 API **直连可用**（本机 curl 要加 `--ssl-no-revoke`），
+>   不需要 7890 代理；改文件用 `PUT /projects/:id/repository/files/:path` +
+>   `encoding=base64`，比 clone 整个 fdroiddata 轻得多。
+
 ## 1. 提交方式
 
 F-Droid 不用 GitHub，走 **GitLab**：

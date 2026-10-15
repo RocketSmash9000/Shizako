@@ -1,0 +1,9 @@
+Changes since the first F-Droid build (versionCode 313):
+
+• Pairing: the port and pairing-code fields are always available now; automatic discovery only pre-fills the port. Devices where mDNS cannot reach the app (a VPN that blocks multicast, some vendor builds) can finally enter the port by hand.
+• Pairing: the activation key is stored only after the device has accepted it, and "paired" is a separate record — a failed attempt no longer shows up as a successful pairing.
+• Pairing: a wrong or expired code, an unreachable port and an interrupted pairing are reported instead of being swallowed; previously the dialog failed without saying anything.
+• Activation: a "connect to a manually specified port" entry was restored, and starting the service falls back to a live local ADB port instead of failing silently.
+• Fixed: authorized apps disappeared from the list after a refresh when the service had been started with root.
+• Fixed: the startup screen could crash on newer Android releases when the page was left before it closed itself.
+• Fixed: a stray Chinese character in the English activation text.

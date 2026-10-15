@@ -219,6 +219,9 @@ Every app requires your explicit approval on first connect; the allowlist is loc
 **Which Android versions are supported?**
 Android 7.0+; wireless debugging activation requires Android 11+.
 
+**The pairing dialog is stuck on "Searching for pairing service" and I cannot enter a port?**
+Automatic discovery relies on mDNS multicast. With a VPN enabled on GrapheneOS the multicast never reaches the app, and some Huawei / HarmonyOS devices block it as well — discovery simply cannot succeed there. Since zako3.14 the port field in the pairing dialog is **always visible and editable**: read the **pairing port** from "Developer options → Wireless debugging → Pair device with pairing code" and type it in together with the pairing code. If adbd already listens on a fixed port (5555, for example), you can also use "Connect to a port manually" on the activation page and skip pairing entirely.
+
 **Why is she so cute?**
 Because the author raises her like a daughter (confirmed).
 

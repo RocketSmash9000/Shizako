@@ -359,7 +359,7 @@ The export function uses SAF (Storage Access Framework). It's reported that MIUI
     <string name="activation_tag_persistent">Survives reboot</string>
     <string name="activation_root_desc_detail">If your device is already rooted, this is the easiest way: grant superuser access and start directly.</string>
     <string name="activation_root_steps">1. Tap Start below\n2. Grant superuser access in the popup\n3. Wait until the service is running</string>
-    <string name="activation_wadb_desc_detail">On Android 11 and above you can start Shizako酱 without a computer. The pairing code is typed in the notification, so you never leave the app.</string>
+    <string name="activation_wadb_desc_detail">On Android 11 and above you can start Shizako without a computer. The pairing code is typed in the notification, so you never leave the app.</string>
     <string name="activation_wadb_steps">1. Tap "Start pairing" below and allow notifications\n2. Enable "Wireless debugging" in the opened settings page\n3. Tap "Pair device with pairing code" — a 6-digit code appears\n4. Pull down the notification shade and enter the code there; pairing, connecting and starting are automatic</string>
     <string name="activation_wadb_action_pair">Start pairing</string>
     <string name="activation_wadb_action_start_paired">Start with existing pairing</string>

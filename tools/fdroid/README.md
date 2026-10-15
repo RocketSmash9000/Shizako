@@ -32,9 +32,16 @@
 >   [note 4023333516](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/50819#note_4023333516)。
 > - recipe 原本 pin 在 `1f1c4f33`（versionCode 313）—— 比 3.13 的三个修复还早，
 >   照它构建出来的 F-Droid 包正好带着 reviewer 碰到的那批 bug。pin 已前移到
->   `41f3681`（versionCode **315**），并补写了 `MaintainerNotes`。
+>   `f1a8e59`（versionCode 仍是 **315**），并补写了 `MaintainerNotes`。
+> - **该变体已不再声明 `REQUEST_INSTALL_PACKAGES`**（此前留着，但这个变体里没有
+>   任何使用方）。做法是只做减项的 manifest 覆盖层
+>   `manager/src/fdroid/AndroidManifest.xml`（`tools:node="remove"`），仅在 `-Pfdroid`
+>   时由 `androidComponents` 喂给变体 —— 仍然不是 product flavor，任务名 / 产物路径 /
+>   变体名都不变，recipe 一个字都不用改；GitHub 版不受影响。细节见 `变体方案.md` 第二节。
 > - `tools/fdroid/com.churan.shizako.yml` 现在**与 MR 里的文件逐字一致**（按
 >   `fdroid rewritemeta` 规范化，无注释），可直接整份覆盖到 fdroiddata 的 `metadata/`。
+>   注意：文件里的 `commit:` 指着某次提交，那次提交自己不可能包含这份文件，
+>   所以仓库这份副本相对 pin 永远差一次提交，差异只有这一行。
 > - recipe 用 `gradleprops: [fdroid]` 传 `-Pfdroid`。pin 的提交必须能带这个开关构建；
 >   本机验证要挂代理，因为该开关会关掉国内镜像、改走官方源：
 >

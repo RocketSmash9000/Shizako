@@ -18,7 +18,7 @@ Repo: https://github.com/cr1437/Shizako.git
 Builds:
   - versionName: zako3.15
     versionCode: 315
-    commit: 41f3681db4b6e3ee2a2212e4419684cc14263fc3
+    commit: f1a8e59de101d0b26c02aff833223bde0301dff5
     subdir: manager
     gradle:
       - yes
@@ -45,10 +45,17 @@ MaintainerNotes: |
   in-app updater and update checks, removes the one-click third-party APK installation
   and the AI explain feature, stops building and packaging the compatibility placeholder
   package (the `stub` module is not included, so no APK using the upstream application
-  id is produced), declares only our own provider authority, and switches the Gradle and
-  Maven repositories to the official ones. fdroidserver's build.py compares versionCode
-  only, so the `-f` suffix is not repeated in `versionName` above; F-Droid's own
-  AutoUpdateMode: Version writes the bare version name as well.
+  id is produced), declares only our own provider authority, switches the Gradle and
+  Maven repositories to the official ones, and drops the `REQUEST_INSTALL_PACKAGES`
+  declaration. Nothing in this variant uses that permission: there is no
+  `PackageInstaller` session and no `ACTION_INSTALL_PACKAGE` in the sources, and the
+  updater hands the downloaded APK to the system installer with `ACTION_VIEW` (the
+  permission is needed by the app that performs the install, not by the caller). It is
+  dropped by a `tools:node="remove"` manifest overlay that is fed to the variant only
+  when the property is set, through AGP's `androidComponents` - still not a product
+  flavour, so no task name, APK path or variant name changes. fdroidserver's build.py
+  compares versionCode only, so the `-f` suffix is not repeated in `versionName` above;
+  F-Droid's own AutoUpdateMode: Version writes the bare version name as well.
 
   The `rikka.shizuku.*` strings left in the DEX (protocol keys such as
   `moe.shizuku.privileged.api.intent.extra.BINDER`, the `moe.shizuku.server.*` AIDL

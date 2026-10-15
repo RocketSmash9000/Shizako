@@ -29,7 +29,7 @@ import moe.shizuku.manager.R
 import moe.shizuku.manager.ShizukuSettings
 import moe.shizuku.manager.activation.ActivationRunner
 import moe.shizuku.manager.adb.AdbPairingService
-import moe.shizuku.manager.adb.PreferenceAdbKeyStore
+import moe.shizuku.manager.adb.AdbPairingState
 import moe.shizuku.manager.app.AppActivity
 import moe.shizuku.manager.app.ThemeHelper
 import moe.shizuku.manager.dhizuku.DhizukuSettings
@@ -225,8 +225,10 @@ class SetupActivity : AppActivity() {
         // 激活可能在旋转前就开始了：重建后要把转圈状态接回来，否则按钮会「复活」
         activatingDhizuku = dhizukuActivationInFlight
         preferredMethod = ShizukuSettings.getPreferredStartMethod()
+        // 认「配对成功」的记录，而不是「本地有没有密钥」：密钥在配对一开始就会生成，
+        // 用它判断会让一次失败的配对也显示成「已配对」
         paired = runCatching {
-            PreferenceAdbKeyStore(ShizukuSettings.getPreferences()).get() != null
+            AdbPairingState.isPaired(ShizukuSettings.getPreferences())
         }.getOrDefault(false)
         canAutoAdb = ServiceStartHelper.canAdbAutoStart(this)
         notificationsAllowed = isNotificationEnabled()

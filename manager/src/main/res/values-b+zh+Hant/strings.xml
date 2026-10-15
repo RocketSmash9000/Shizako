@@ -72,12 +72,15 @@
     <string name="home_wireless_adb_title">透過無線偵錯啟動</string>
     <string name="home_wireless_adb_description">在 Android 11 或更高版本上，您可以直接從您的裝置啟用無線偵錯並啟動 Shizako，無須與電腦連線。&lt;p>請先檢視分步驟指南。</string>
     <string name="dialog_adb_pairing_title">與裝置配對</string>
-    <string name="paring_code_is_wrong">配對碼錯誤。</string>
+    <string name="paring_code_is_wrong">配對碼錯誤或已失效。</string>
     <string name="cannot_connect_port">無法連線至無線偵錯服務。</string>
     <string name="adb_pairing_requires_multi_window">請先進入「分割畫面」(多視窗) 模式。</string>
     <string name="adb_error_key_store">無法為無線偵錯產生金鑰。
 \n這可能是因為此裝置上的 KeyStore 機制已損壞。</string>
     <string name="adb_pair_required">請先進行配對步驟。</string>
+    <string name="pairing_handshake_failed">無法與配對服務建立加密連線：連接埠或配對碼可能已失效（系統「使用配對碼配對裝置」對話方塊一關，配對碼就作廢）。請重新開啟對話方塊後再試一次。</string>
+    <string name="pairing_failed_protocol">配對被裝置中斷了。請重新開啟系統「使用配對碼配對裝置」對話方塊，再試一次。</string>
+    <string name="pairing_failed_unknown">配對失敗。請重新開啟系統「使用配對碼配對裝置」對話方塊，再試一次。</string>
     <string name="action_stop">你狠心放弃Shizako酱吗</string>
     <string name="adb_pairing">配對</string>
     <string name="starter">啟動器</string>
@@ -544,6 +547,7 @@
 <string name="settings_nav_bar_summary">自定義入口和排序</string>
 <string name="theme_color_sakura">櫻花粉</string>
 <string name="activation_quick_start_action_repair">重新配對</string>
+<string name="activation_pairing_unconfirmed">本機存有一次配對嘗試留下的金鑰，但沒有配對成功的紀錄。若「啟動」失敗，請重新配對一次。</string>
 <string name="settings_api_log_summary">看看哪些應用通過 Shizako醬 調用了特權 API</string>
 <string name="restore_failed">恢復失敗</string>
 <string name="dhizuku_what_body">Dhizuku 模式下，Shizako醬 是設備所有者，可以把這份特權分給別的應用。這裡列的就是借到特權的應用 —— 不想給了就點「收回特權」，下次它要用來敲門重新申請。</string>

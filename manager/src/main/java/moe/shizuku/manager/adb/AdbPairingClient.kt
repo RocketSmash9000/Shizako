@@ -151,25 +151,25 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
     private lateinit var pairingContext: PairingContext
     private var state: State = State.Ready
 
-    fun start(): Boolean {
+    /**
+     * 跑完整个配对流程；失败一律抛异常。
+     *
+     * 以前这里用 `return false` 表示失败，调用方（配对对话框 / 通知栏服务）拿不到任何
+     * 原因，用户看到的就是「转一下圈，然后什么也没发生」—— 配不上，也不知道为什么。
+     * 现在每种失败都有明确的类型：[AdbInvalidPairingCodeException] 是配对码不对或已失效，
+     * [AdbPairingFailedException] 是协议/加密层断了，连接与握手阶段的异常（如
+     * [java.net.ConnectException]、SSL 握手失败）原样向上抛。
+     */
+    fun start() {
         setupTlsConnection()
 
         state = State.ExchangingMsgs
-
-        if (!doExchangeMsgs()) {
-            state = State.Stopped
-            return false
-        }
+        doExchangeMsgs()
 
         state = State.ExchangingPeerInfo
-
-        if (!doExchangePeerInfo()) {
-            state = State.Stopped
-            return false
-        }
+        doExchangePeerInfo()
 
         state = State.Stopped
-        return true
     }
 
     private fun setupTlsConnection() {
@@ -221,46 +221,54 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
         Log.d(TAG, "write payload, size=${payload.size}")
     }
 
-    private fun doExchangeMsgs(): Boolean {
+    private fun doExchangeMsgs() {
         val msg = pairingContext.msg
         val size = msg.size
 
         val ourHeader = createHeader(PairingPacketHeader.Type.SPAKE2_MSG, size)
         writeHeader(ourHeader, msg)
 
-        val theirHeader = readHeader() ?: return false
-        if (theirHeader.type != PairingPacketHeader.Type.SPAKE2_MSG.value) return false
+        val theirHeader = readHeader()
+            ?: throw AdbPairingFailedException("no SPAKE2 message header from peer")
+        if (theirHeader.type != PairingPacketHeader.Type.SPAKE2_MSG.value) {
+            throw AdbPairingFailedException("unexpected packet type ${theirHeader.type} while waiting for SPAKE2 message")
+        }
 
         val theirMessage = ByteArray(theirHeader.payload)
         inputStream.readFully(theirMessage)
 
-        if (!pairingContext.initCipher(theirMessage)) return false
-        return true
+        // SPAKE2 的密码校验不过 = 两边算出来的配对码不一致：
+        // 输错了，或者那个配对码已经作废（系统配对对话框一关，码就失效）。
+        if (!pairingContext.initCipher(theirMessage)) {
+            throw AdbInvalidPairingCodeException()
+        }
     }
 
-    private fun doExchangePeerInfo(): Boolean {
+    private fun doExchangePeerInfo() {
         val buf = ByteBuffer.allocate(kMaxPeerInfoSize).order(ByteOrder.BIG_ENDIAN)
         peerInfo.writeTo(buf)
 
-        val outbuf = pairingContext.encrypt(buf.array()) ?: return false
+        val outbuf = pairingContext.encrypt(buf.array())
+            ?: throw AdbPairingFailedException("unable to encrypt local peer info")
 
         val ourHeader = createHeader(PairingPacketHeader.Type.PEER_INFO, outbuf.size)
         writeHeader(ourHeader, outbuf)
 
-        val theirHeader = readHeader() ?: return false
-        if (theirHeader.type != PairingPacketHeader.Type.PEER_INFO.value) return false
+        val theirHeader = readHeader()
+            ?: throw AdbPairingFailedException("no peer info header from peer")
+        if (theirHeader.type != PairingPacketHeader.Type.PEER_INFO.value) {
+            throw AdbPairingFailedException("unexpected packet type ${theirHeader.type} while waiting for peer info")
+        }
 
         val theirMessage = ByteArray(theirHeader.payload)
         inputStream.readFully(theirMessage)
 
         val decrypted = pairingContext.decrypt(theirMessage) ?: throw AdbInvalidPairingCodeException()
         if (decrypted.size != kMaxPeerInfoSize) {
-            Log.e(TAG, "Got size=${decrypted.size} PeerInfo.size=$kMaxPeerInfoSize")
-            return false
+            throw AdbPairingFailedException("peer info size mismatch (got ${decrypted.size}, expected $kMaxPeerInfoSize)")
         }
         val theirPeerInfo = PeerInfo.readFrom(ByteBuffer.wrap(decrypted))
         Log.d(TAG, theirPeerInfo.toString())
-        return true
     }
 
     override fun close() {

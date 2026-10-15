@@ -23,6 +23,7 @@ import androidx.navigation.fragment.findNavController
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import moe.shizuku.manager.R
 import moe.shizuku.manager.ShizukuSettings
+import moe.shizuku.manager.adb.AdbPairingState
 import moe.shizuku.manager.adb.PreferenceAdbKeyStore
 import moe.shizuku.manager.databinding.FragmentSubPageBinding
 import moe.shizuku.manager.dhizuku.DhizukuSettings
@@ -134,6 +135,13 @@ class ActivationFragment : Fragment() {
     private fun refreshStatus() {
         val context = context ?: return
         val running = Shizuku.pingBinder()
+        val preferences = ShizukuSettings.getPreferences()
+        val hasKey = hasPairingKey()
+        // 服务跑起来了，说明这把密钥确实被设备信任 —— 顺手补一笔配对记录。
+        // 旧版本没有这份记录，升级上来的用户靠这一步自动恢复正常显示。
+        if (running && hasKey && !AdbPairingState.isPaired(preferences)) {
+            AdbPairingState.markPaired(preferences)
+        }
         uiState = uiState.copy(
             serviceMode = when {
                 !running -> ServiceMode.NOT_RUNNING
@@ -143,13 +151,20 @@ class ActivationFragment : Fragment() {
             dhizukuActive = DhizukuSettings.isActive(context),
             dhizukuModeEnabled = DhizukuSettings.isModeEnabled(),
             rooted = EnvironmentUtils.isRooted(),
-            paired = hasPairingKey(),
+            paired = hasKey,
+            pairingConfirmed = AdbPairingState.isPaired(preferences),
             canAutoAdbStart = ServiceStartHelper.canAdbAutoStart(context),
             adbStarting = adbStarting,
         )
     }
 
-    /** 本地是否已经存了配对用的 adb 私钥（配对过一次就一直有） */
+    /**
+     * 本地是否已经存了配对用的 adb 私钥。
+     *
+     * 注意：**有私钥不等于设备认识这把它**。密钥在用户点下配对按钮的那一刻就会生成，
+     * 配对失败同样会留下 —— 所以「已配对」的状态显示要用 [AdbPairingState] 的
+     * 成功记录来判断，这里只表示「本地有可用于连接的密钥」。
+     */
     private fun hasPairingKey(): Boolean =
         PreferenceAdbKeyStore(ShizukuSettings.getPreferences()).get() != null
 
@@ -190,7 +205,10 @@ class ActivationFragment : Fragment() {
             .setTitle(R.string.activation_quick_start_action_forget)
             .setMessage(R.string.activation_quick_start_forget_confirm)
             .setPositiveButton(android.R.string.ok) { _, _ ->
-                ShizukuSettings.getPreferences().edit().remove("adbkey").apply()
+                val preferences = ShizukuSettings.getPreferences()
+                preferences.edit().remove("adbkey").apply()
+                // 配对记录也要清：留着它会让界面继续显示「已配对」，而密钥已经不在了
+                AdbPairingState.clear(preferences)
                 Toast.makeText(context, R.string.activation_toast_pairing_forgotten, Toast.LENGTH_SHORT).show()
                 refreshStatus()
             }

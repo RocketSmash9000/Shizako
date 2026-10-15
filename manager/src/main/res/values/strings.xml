@@ -65,7 +65,7 @@ Note, do not disable \"Developer options\" or \"USB debugging\", or Shizako will
     <string name="dialog_adb_pairing_discovery">Searching for pairing service</string>
     <string name="dialog_adb_pairing_manual_title">Enter the pairing port</string>
     <string name="dialog_adb_pairing_paring_code">Pairing code</string>
-    <string name="paring_code_is_wrong">Pairing code is wrong.</string>
+    <string name="paring_code_is_wrong">Pairing code is wrong or has expired.</string>
     <string name="cannot_connect_port">Can\'t connect to wireless debugging service.</string>
     <string name="dialog_wireless_adb_not_enabled">Wireless debugging is not enabled.\nNote, before Android 11, to enable wireless debugging, computer connection is a must.</string>
     <string name="dialog_adb_pairing_message">Please start paring by the following steps: \"Developer Options\" - \"Wireless debugging\" - \"Pairing device using pairing code\".\n\nAfter the pairing process starts, you will able to input the pairing code.</string>
@@ -74,6 +74,9 @@ Note, do not disable \"Developer options\" or \"USB debugging\", or Shizako will
     <string name="dialog_adb_pairing_mdns_timeout">Pairing service not found. mDNS multicast is probably blocked by the system, a VPN or a firewall — this happens on GrapheneOS with a VPN enabled and on some Huawei / HarmonyOS devices. Enter the port manually; you can find it on the wireless debugging screen.</string>
     <string name="adb_error_key_store">Unable to generate key for wireless debugging.\nThis may be because KeyStore mechanism of this device is broken.</string>
     <string name="adb_pair_required">Please go through the pairing step first.</string>
+    <string name="pairing_handshake_failed">Cannot establish a secure connection to the pairing service. The port or the pairing code has probably expired - the system pairing dialog is only valid while it stays open. Reopen it and try again.</string>
+    <string name="pairing_failed_protocol">Pairing was interrupted by the device. Reopen the system \"Pair with device\" dialog and try again.</string>
+    <string name="pairing_failed_unknown">Pairing failed. Reopen the system \"Pair with device\" dialog and try again.</string>
     <string name="development_settings">Developer options</string>
     <string name="notification_settings">Notification options</string>
     <string name="adb_pairing_tutorial_title">Pair Shizako with your device</string>
@@ -365,6 +368,7 @@ The export function uses SAF (Storage Access Framework). It's reported that MIUI
     <string name="activation_quick_start_desc">The pairing is remembered. After a reboot you can start the Shizako service without pairing again.</string>
     <string name="activation_quick_start_action_start">Start service</string>
     <string name="activation_quick_start_action_repair">Pair again</string>
+    <string name="activation_pairing_unconfirmed">An activation key from an earlier attempt is stored on this device, but there is no record of a successful pairing. If starting fails, pair once more.</string>
     <string name="activation_quick_start_action_forget">Forget pairing</string>
     <string name="activation_quick_start_forget_confirm">The stored pairing will be removed and you will have to pair again before starting. Continue?</string>
     <string name="activation_quick_start_hint_secure_settings">Note: without the "modify secure settings" permission, make sure Wireless debugging is still on before starting.</string>

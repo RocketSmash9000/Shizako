@@ -19,6 +19,7 @@ import moe.shizuku.manager.starter.ServiceStartHelper
 import rikka.core.ktx.unsafeLazy
 import rikka.shizuku.Shizuku
 import java.net.ConnectException
+import javax.net.ssl.SSLException
 
 @TargetApi(Build.VERSION_CODES.R)
 class AdbPairingService : Service() {
@@ -157,10 +158,16 @@ class AdbPairingService : Service() {
         GlobalScope.launch(Dispatchers.IO) {
             val host = "127.0.0.1"
 
+            val preferences = ShizukuSettings.getPreferences()
+            // 配对期间的密钥只留内存，配对成功才落盘 —— 一次失败的尝试不该留在本地，
+            // 否则激活页会把它当成「已配对」的证据（adbd 根本不认识它）
+            val keyStore = DeferredAdbKeyStore(PreferenceAdbKeyStore(preferences))
             val key = try {
-                AdbKey(PreferenceAdbKeyStore(ShizukuSettings.getPreferences()), "shizuku")
+                AdbKey(keyStore, "shizuku")
             } catch (e: Throwable) {
                 e.printStackTrace()
+                // 以前这里直接 return，通知会永远停在「配对中」，用户等不出任何结果
+                handleResult(false, AdbKeyException(e))
                 return@launch
             }
 
@@ -169,7 +176,9 @@ class AdbPairingService : Service() {
             }.onFailure {
                 handleResult(false, it)
             }.onSuccess {
-                handleResult(it, null)
+                keyStore.commit()
+                AdbPairingState.markPaired(preferences)
+                handleResult(true, null)
             }
         }
 
@@ -202,8 +211,15 @@ class AdbPairingService : Service() {
                 is AdbKeyException -> {
                     getString(R.string.adb_error_key_store)
                 }
+                is AdbPairingFailedException -> {
+                    getString(R.string.pairing_failed_protocol)
+                }
+                is SSLException -> {
+                    getString(R.string.pairing_handshake_failed)
+                }
                 else -> {
-                    exception?.let { Log.getStackTraceString(it) }
+                    // 原因不明时给一句能照做的提示，别把堆栈甩给用户
+                    getString(R.string.pairing_failed_unknown)
                 }
             }
 

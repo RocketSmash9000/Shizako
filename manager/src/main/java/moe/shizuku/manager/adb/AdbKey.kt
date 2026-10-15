@@ -278,6 +278,34 @@ class PreferenceAdbKeyStore(private val preference: SharedPreferences) : AdbKeyS
     }
 }
 
+/**
+ * 延迟落盘的密钥仓库：专给「配对」用。
+ *
+ * [AdbKey] 构造时就会把新生成的私钥 `put` 进仓库，而从点下配对按钮到配对结束之间，
+ * 用户随时可能失败或退出（配对码输错、端口不通、系统对话框被关掉）。
+ * 直接写进 [SharedPreferences] 的话，本地就多出一把 adbd 从未见过的密钥 ——
+ * 激活页随后会拿它当作「已配对」的证据，界面上就开始撒谎。
+ *
+ * 所以配对期间先用内存暂存：[put] 只记在内存，配对真正成功再 [commit]；
+ * 失败了就什么都不写，磁盘保持原样。[get] 优先返回暂存的密钥，否则回落到真正的
+ * 仓库 —— 复用上次配对成功留下的密钥（Android 的配对就是登记公钥，之后一直用同一对）。
+ */
+class DeferredAdbKeyStore(private val delegate: AdbKeyStore) : AdbKeyStore {
+
+    private var pending: ByteArray? = null
+
+    override fun put(bytes: ByteArray) {
+        pending = bytes
+    }
+
+    override fun get(): ByteArray? = pending ?: delegate.get()
+
+    /** 配对成功：这一刻才把暂存的密钥写进真正的仓库。 */
+    fun commit() {
+        pending?.let { delegate.put(it) }
+    }
+}
+
 const val ANDROID_PUBKEY_MODULUS_SIZE = 2048 / 8
 const val ANDROID_PUBKEY_MODULUS_SIZE_WORDS = ANDROID_PUBKEY_MODULUS_SIZE / 4
 const val RSAPublicKey_Size = 524

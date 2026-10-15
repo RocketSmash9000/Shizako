@@ -52,9 +52,13 @@ import moe.shizuku.manager.adb.AdbKey
 import moe.shizuku.manager.adb.AdbKeyException
 import moe.shizuku.manager.adb.AdbMdns
 import moe.shizuku.manager.adb.AdbPairingClient
+import moe.shizuku.manager.adb.AdbPairingFailedException
+import moe.shizuku.manager.adb.AdbPairingState
+import moe.shizuku.manager.adb.DeferredAdbKeyStore
 import moe.shizuku.manager.adb.PreferenceAdbKeyStore
 import moe.shizuku.manager.ui.hint.HintPalette
 import java.net.ConnectException
+import javax.net.ssl.SSLException
 
 /**
  * 应用内配对对话框（照搬 Shevery 的 AdbPairDialog 设计）。
@@ -83,6 +87,12 @@ fun AdbPairDialog(
     var pairingCode by remember { mutableStateOf("") }
     var portError by remember { mutableStateOf<String?>(null) }
     var pairingCodeError by remember { mutableStateOf<String?>(null) }
+    /**
+     * 与具体输入框无关的失败原因（握手断了、协议数据异常……）。
+     *
+     * 这些原因挂在端口框下面会误导用户去改端口，所以单独一块展示。
+     */
+    var generalError by remember { mutableStateOf<String?>(null) }
     var isPairing by remember { mutableStateOf(false) }
     /** mDNS 是否还在搜索。只影响文案与转圈：端口框**任何情况下**都能手输。 */
     var scanning by remember { mutableStateOf(false) }
@@ -200,6 +210,7 @@ fun AdbPairDialog(
                         onValueChange = {
                             pairingCode = it.filter(Char::isDigit).take(6)
                             pairingCodeError = null
+                            generalError = null
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(stringResource(R.string.dialog_adb_pairing_paring_code)) },
@@ -215,6 +226,7 @@ fun AdbPairDialog(
                         onValueChange = {
                             portText = it.filter(Char::isDigit).take(5)
                             portError = null
+                            generalError = null
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(stringResource(R.string.dialog_adb_port)) },
@@ -231,6 +243,13 @@ fun AdbPairDialog(
                             )
                         },
                     )
+                    generalError?.let { error ->
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = palette.error,
+                        )
+                    }
                     if (isPairing) {
                         CircularProgressIndicator(
                             color = palette.accent,
@@ -267,10 +286,16 @@ fun AdbPairDialog(
                                 return@Button
                             }
                             isPairing = true
+                            generalError = null
                             scope.launch(Dispatchers.IO) {
                                 val host = "127.0.0.1"
+                                // 配对期间的密钥只留在内存里，配对真的成功才落盘：
+                                // 一次失败的尝试不该在本地留下一把 adbd 不认识的密钥，
+                                // 否则激活页会把它当成「已配对」的证据（用户根本没配上）。
+                                val preferences = ShizukuSettings.getPreferences()
+                                val keyStore = DeferredAdbKeyStore(PreferenceAdbKeyStore(preferences))
                                 val key = try {
-                                    AdbKey(PreferenceAdbKeyStore(ShizukuSettings.getPreferences()), "shizuku")
+                                    AdbKey(keyStore, "shizuku")
                                 } catch (e: Throwable) {
                                     withContext(Dispatchers.Main) {
                                         isPairing = false
@@ -287,10 +312,12 @@ fun AdbPairDialog(
                                 }
                                 withContext(Dispatchers.Main) {
                                     isPairing = false
-                                    result.onSuccess { success ->
-                                        if (success) {
-                                            onPairSuccess()
-                                        }
+                                    result.onSuccess {
+                                        // 配对真的成功了：这一刻才把密钥落盘并记一笔，
+                                        // 界面上的「已配对」从此有据可依
+                                        keyStore.commit()
+                                        AdbPairingState.markPaired(preferences)
+                                        onPairSuccess()
                                     }.onFailure { err ->
                                         when (err) {
                                             is ConnectException -> {
@@ -306,8 +333,17 @@ fun AdbPairDialog(
                                                     Toast.LENGTH_LONG,
                                                 ).apply { setGravity(Gravity.CENTER, 0, 0) }.show()
                                             }
+                                            // 加密连接或协议层断了：跟端口号、配对码都无关，
+                                            // 单独整块提示，别让用户白白折腾输入框
+                                            is SSLException -> {
+                                                generalError = context.getString(R.string.pairing_handshake_failed)
+                                            }
+                                            is AdbPairingFailedException -> {
+                                                generalError = context.getString(R.string.pairing_failed_protocol)
+                                            }
                                             else -> {
-                                                portError = err.message ?: context.getString(R.string.cannot_connect_port)
+                                                generalError = err.message
+                                                    ?: context.getString(R.string.pairing_failed_unknown)
                                             }
                                         }
                                     }

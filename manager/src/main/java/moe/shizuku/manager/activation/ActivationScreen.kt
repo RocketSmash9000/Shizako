@@ -83,8 +83,16 @@ data class ActivationUiState(
     val supportsWirelessAdb: Boolean = true,
     val isMiui: Boolean = false,
     val adbCommand: String = "",
-    /** 已经配对过（adb 私钥在本地，重启后不用再配对） */
+    /** 本地有可用于连接的 adb 私钥（不代表设备一定还认它，见 [pairingConfirmed]） */
     val paired: Boolean = false,
+    /**
+     * 是否**确认**配对成功过。
+     *
+     * 密钥在用户点下「确定」发起配对的那一刻就生成了，配对码错、端口不通、中途取消
+     * 都会把它留在本地 —— 只看 [paired] 就显示「已配对」，就会出现「明明没配上、
+     * 界面却说已配对」。所以状态显示要认这份成功记录。
+     */
+    val pairingConfirmed: Boolean = false,
     /** 有「修改安全设置」权限，可以自己开无线调试再启动 */
     val canAutoAdbStart: Boolean = false,
     /** 正在用已配对信息启动服务 */
@@ -256,6 +264,15 @@ fun ActivationScreen(
                             onClick = {
                                 if (inPairingWindow) showPairDialog = true else onStartPairing()
                             },
+                        )
+                    }
+                    // 本地有密钥、却没有配对成功的记录（多半是上一次配对没成功留下的）：
+                    // 不能让「启动（已配对）」冒充确定的事实 —— 说清楚，并给出下一步动作
+                    if (state.paired && !state.pairingConfirmed) {
+                        Text(
+                            text = stringResource(R.string.activation_pairing_unconfirmed),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.error,
                         )
                     }
                     HintSecondaryButton(

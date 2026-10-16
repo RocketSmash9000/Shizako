@@ -79,7 +79,11 @@ public class ServiceStarter {
             }
         }
         if (managerPackageName == null) {
-            managerPackageName = "moe.shizuku.privileged.api";
+            // 兜底值必须是我们自己的 applicationId。上游这里写死了
+            // "moe.shizuku.privileged.api"；本 fork 换过包名，照抄上游的兜底值不但找不到
+            // 管理器（user service 的 binder 送不回去，服务器 30s 超时），
+            // 还会把一个本项目的二进制里本不该出现、且受上游许可禁止的上游包名字面量带进去。
+            managerPackageName = "com.churan.shizako";
         }
 
         UserService.setTag(TAG);

@@ -52,7 +52,7 @@
 | 新手引导 | 首次启动逐步向导：语言 / 外观 / 启动方式，引导内**直接完成激活**；免责声明 10 秒强制阅读 |
 | 四种激活方式 | Root / 无线调试 / 电脑 ADB / Dhizuku，一页搞定；已配对可一键启动 |
 | 一键注入 | 把权限分给常用工具（黑阈、小黑屋、冰箱、炼妖壶），没装的应用内直接下载 |
-| 兼容桥 | 内置官方 provider 中转，只认旧包名的老客户端也能连上 |
+| 兼容桥 | 内置 provider 中转，Shizuku-API 客户端零改动直连；只用自己的 authority，**不占用上游任何标识** |
 | Tasker 支持 | 广播一键启停服务、激活 Dhizuku、查状态、触发下载 |
 | API 审计 | 完整记录哪个应用调用了哪个特权 API，设置里随时查 |
 | 自动更新 | 每次打开应用自动检查新版本，发现更新**就地弹出可下载的对话框**；网络拦截 GitHub 时自动切换可用源 |
@@ -107,9 +107,34 @@
 - 每个 Dhizuku-API 应用首次借用都会弹授权框，同意后记入本地白名单，可在「Dhizuku 授权的应用」页面收回
 - 兼容层为独立编写（wire 协议对齐 Dhizuku-API），不依赖 GPL 许可的 Dhizuku-API 库，Shizako 保持 Apache-2.0
 
-### ⚠️ 一个重要的「不能」
+### 🔏 与官方 Shizuku 共存，以及「怎么确认你装的是官方构建」
 
-Shizako 内置兼容桥占用了官方 provider authority `moe.shizuku.privileged.api.shizuku`，因此**不能与官方 Shizuku 同时安装**（Android 会报 provider 冲突）。二选一即可。
+Shizako 用**自己的**包名（`com.churan.shizako`）和权限名，provider 只声明自己的 authority
+`com.churan.shizako.shizuku`，不使用上游的 `moe.shizuku.privileged.api` 包名、`Shizuku` 应用名、
+`moe.shizuku.manager.permission.*` 权限、上游 provider authority 或上游图标。
+因此它**可以与官方 Shizuku 同时安装**，两者互不干扰 —— 哪个在跑，就用哪个。
+（历史上 GitHub 版曾用一个占用上游包名的「兼容占位包」来讨好把老包名写死的客户端，该方案已彻底移除：
+它逐字违反上游 Apache-2.0 §6 的附加条款，且从外部看与一份「重打包改名的仿冒品」无法区分。）
+
+#### 官方构建的签名指纹
+
+所有官方构建都使用同一个发布证书签名：
+
+| 项 | 值 |
+| --- | --- |
+| 证书主体 | `CN=Shizako, OU=Churan, O=Churan, L=Beijing, ST=Beijing, C=CN` |
+| 证书 SHA-256 | `515BAF0C727F2AFBABA8A22379A05F8F2CC98682E5BEB24FB166565ACC9F9C8A` |
+
+校验方式（二选一）：
+
+1. 电脑上对该 APK 执行 `apksigner verify --print-certs shizako-*.apk`，比对上面这一行。
+2. 手机上的应用内「设置 → 关于」会显示**当前这份安装包自己的**签名指纹，与上表对照即可。
+   如果指纹对不上，App 启动时也会弹警告并引导打开官方发布页核对（只警告、不阻断；F-Droid 版不弹）。
+
+指纹对不上 = 这份 APK 被人重新打包并换过签名，**不要安装、不要授权**。
+F-Droid 版由 F-Droid 用自己的密钥重新签名，指纹与上表不同，属正常；请以 F-Droid 页面标注为准。
+
+> 「第一次配对端口」之类的使用问题见下方 FAQ；本节只讲**这份文件本身是不是官方的**。
 
 ---
 
@@ -193,7 +218,6 @@ Shizako/
 ├── server/     特权服务进程（Java，跑在 shell / root 里）
 ├── starter/    服务启动器
 ├── shell/      预编译的 shell 工具
-├── stub/       兼容占位包（moe.shizuku.privileged.api）
 ├── common/     共享模块
 ├── api/        Shizuku-API 客户端库源码（MIT）
 └── docs/       文档与物料
@@ -207,10 +231,10 @@ Shizako/
 A：不要。无线调试 / USB 就能激活；有 Root 也行，姿势更多，但绝非必需。
 
 **Q：跟 Shizuku 什么关系？**
-A：它兼容 Shizuku-API 生态 —— 用官方 SDK 写的应用零改动直连。按上游许可要求，本项目使用自己的包名与权限名，因此不能与官方 Shizuku 共存；在此之上还加了 Dhizuku 兼容、一键注入等自家功能。
+A：它兼容 Shizuku-API 生态 —— 用官方 SDK 写的应用零改动直连。按上游许可要求，本项目使用自己的包名与权限名、不占用上游任何 authority，因此可以和官方 Shizuku 装在同一台机器上；在此之上还加了 Dhizuku 兼容、一键注入等自家功能。
 
 **Q：能不能和官方 Shizuku 一起装？**
-A：不能，兼容桥会撞 provider。二选一。
+A：可以。Shizako 的 provider 只声明自己的 authority，不会和官方 Shizuku 撞。两个都装、各自授权即可。
 
 **Q：授权给应用安全吗？**
 A：每个应用都要你亲自点头才拿得到通行证，白名单本地记录、随时可收回；Dhizuku 特权转发也只在 Shizako 进程内完成。
@@ -245,8 +269,21 @@ A：因为作者把她当女儿养（确信）。
 本项目继承上游 [Apache License 2.0](LICENSE)，另见 [NOTICE](NOTICE)。
 
 - 原项目版权归 RikkaApps 所有；Shizako 的修改部分版权归 初然 所有
-- 未使用上游 `Shizuku` 名称、`moe.shizuku.privileged.api` 包名、`moe.shizuku.manager.permission.*` 权限及上游图标
+- 未使用上游 `Shizuku` 名称、`moe.shizuku.privileged.api` 包名、`moe.shizuku.manager.permission.*` 权限、上游 provider authority 及上游图标
 - `api/` 目录遵循其自身的 MIT License
+
+### 名称与物料（品牌）
+
+沿用上游在 Apache-2.0 §6 下的附加条款形式，本项目同样声明：
+
+- **禁止**以 `Shizako`（含 `Shizako+`、`Shizako Plus`、`Shizako Pro` 等任何易混淆变体）作为
+  第三方应用的名称，或用作其包名 / application id / 权限名的组成部分；
+- **禁止**使用本项目的看板娘立绘、应用图标（`manager/src/main/res/mipmap*/ic_launcher*.png`
+  等全部物料）用于展示 Shizako 之外的任何东西；
+- **禁止**以 `com.churan.shizako` 为 application id 分发任何非官方构建。
+
+换句话说：代码可以（也欢迎）fork，**名字、图标、包名要换掉**。
+这样既符合 Apache-2.0，也让用户一眼能分辨官方构建 —— 这正是防仿冒最有效的一环。
 
 ---
 

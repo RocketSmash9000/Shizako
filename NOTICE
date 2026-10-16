@@ -17,11 +17,71 @@ Modifications Copyright 2026 初然 (Churan):
 - Replaced all launcher icon assets
 - Added one-click grant (activation) home card
 - Rebranded about page and version scheme (zako2.1)
+- Removed the "compatibility stub" package (see below)
 
-Per the upstream license notice, this project does NOT use the "Shizuku"
-app name, the "moe.shizuku.privileged.api" application id, the
-"moe.shizuku.manager.permission.*" permissions, or any upstream
-launcher icon assets.
+Compliance with the upstream license notice
+-------------------------------------------
+
+Upstream adds the following terms to Apache-2.0 section 6:
+
+  "You are FORBIDDEN to use Shizuku as app name or use
+   moe.shizuku.privileged.api as application id or declare
+   moe.shizuku.manager.permission.* permission."
+
+This project complies with all of them:
+
+- App name: "Shizako" everywhere; never "Shizuku".
+- Application id: com.churan.shizako only. No build, task, asset or
+  runtime path in this repository produces or installs a package whose
+  application id is moe.shizuku.privileged.api. An earlier revision did
+  bundle such a placeholder ("compatibility stub") in the GitHub build to
+  satisfy clients with the legacy package name hard-coded; it has been
+  removed entirely, along with its module, build tasks, UI entry and
+  strings. The F-Droid build never contained it.
+- Permissions: com.churan.shizako.permission.* only. The library under
+  "api/provider" *requests* the upstream permission name (as any
+  Shizuku-API client does) so that apps can also talk to the official
+  Shizuku; it declares none of moe.shizuku.manager.permission.*.
+- Provider authority: com.churan.shizako.shizuku only. The upstream
+  authority moe.shizuku.privileged.api.shizuku is no longer declared, so
+  this app can be installed alongside the official Shizuku.
+- Launcher icons: replaced, original upstream icon assets are not used.
+
+Wire protocol constants inherited from Shizuku-API are kept as-is
+(e.g. the "moe.shizuku.privileged.api.intent.extra.BINDER" Bundle key,
+moe.shizuku.server.* AIDL names). Those are interoperability strings
+required to talk to unmodified Shizuku-API clients, not identity claims:
+they name neither this application nor any of its components.
+
+Name and artwork
+----------------
+
+Following the same form as the upstream addendum, and to make official
+builds distinguishable from repackaged copies:
+
+- You are FORBIDDEN to use "Shizako" (including "Shizako+",
+  "Shizako Plus", "Shizako Pro" or any confusingly similar variant) as
+  the name of a third-party application, or as part of its package name,
+  application id or permission names.
+- You are FORBIDDEN to use this project's mascot artwork or launcher
+  icons (manager/src/main/res/mipmap*/ic_launcher*.png and all related
+  assets) for anything other than displaying Shizako itself.
+- You are FORBIDDEN to distribute any non-official build under the
+  application id com.churan.shizako.
+
+Forking the code is welcome; change the name, the icons and the package
+name, and everything is fine.
+
+Official build signing certificate
+----------------------------------
+
+  Subject : CN=Shizako, OU=Churan, O=Churan, L=Beijing, ST=Beijing, C=CN
+  SHA-256 : 515BAF0C727F2AFBABA8A22379A05F8F2CC98682E5BEB24FB166565ACC9F9C8A
+
+Verify a downloaded APK with:
+  apksigner verify --print-certs shizako-*.apk
+or check the fingerprint shown under Settings -> About inside the app.
+F-Droid builds are re-signed with F-Droid's own key and differ by design.
 
 The "api" directory contains the source of Shizuku-API
 (https://github.com/RikkaApps/Shizuku-API), vendored into this repository

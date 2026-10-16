@@ -160,6 +160,9 @@ class MainActivity : AppActivity() {
         // 老用户升级后的一次性「更新欢迎页」（新装用户不弹）
         checkUpdateWelcome()
 
+        // 防伪自检：GitHub 版签名与官方不符 → 警告 + 引导核对（只警告、不阻断）
+        moe.shizuku.manager.security.SignatureGuard.checkOnLaunch(this)
+
         // 后台保活：打开 App 时把看门狗带到岗（划掉后由它自己 / shell 小看门拉回来）
         if (ShizukuSettings.isWatchdogEnabled() && !moe.shizuku.manager.watchdog.WatchdogService.isRunning) {
             runCatching { moe.shizuku.manager.watchdog.WatchdogService.start(this) }

@@ -47,14 +47,10 @@ object FdroidBuild {
      */
     val allowAiExplain: Boolean get() = !isFdroid
 
-    /**
-     * 兼容性占位包（[moe.shizuku.manager.compat.StubManager]）：装一个 applicationId 为
-     * 上游 `moe.shizuku.privileged.api` 的空壳，好让把该包名写死在代码里的第三方应用
-     * 「看得见」本应用。
-     *
-     * 关掉的原因：上游 README 的 FORBIDDEN 条款禁止 fork 使用该 application id，而
-     * F-Droid 维护者在 MR 里明确要求「稳妥优先、在该变体里关掉」。F-Droid 版因此
-     * **不构建、不打包、不安装**占位包，也不显示相关入口（连包名字面量都不进 DEX）。
-     */
-    val allowCompatStub: Boolean get() = !isFdroid
+    // 曾经这里还有一个 allowCompatStub：兼容性占位包（applicationId 为上游
+    // moe.shizuku.privileged.api、应用名 "Shizuku" 的空壳），只在 GitHub 版开启。
+    // 现在**两个变体都彻底移除**了 —— 它逐字违反上游 Apache-2.0 §6 的 FORBIDDEN 条款，
+    // 而且任何人解包 APK 跑一次 aapt2 dump badging 就能看到那个包，从外部看与一份
+    // 「重打包改名的仿冒品」无法区分。相关模块、构建任务、界面入口与字符串已全部删除。
+    // 详见 NOTICE 与 README 的「官方构建与校验」一节。
 }

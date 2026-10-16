@@ -1100,9 +1100,63 @@ private fun AboutPage(
             }
         }
 
-        // 信息
+        // 签名指纹（防伪公示）：展示当前安装包自己的证书 SHA-256 + 校验状态，
+        // 与 README/官网公布的官方指纹对照；点一下复制整串。
         item {
             HintCard(palette = palette, modifier = Modifier.itemEntrance(2)) {
+                val fingerprint = remember { moe.shizuku.manager.security.SignatureGuard.ownFingerprint(context) }
+                val verifyResult = remember {
+                    fingerprint?.let { fp ->
+                        if (fp.equals(
+                                moe.shizuku.manager.security.SignatureGuard.OFFICIAL_SHA256,
+                                ignoreCase = true,
+                            )
+                        ) {
+                            moe.shizuku.manager.security.SignatureGuard.Result.OFFICIAL
+                        } else if (moe.shizuku.manager.fdroid.FdroidBuild.isFdroid) {
+                            moe.shizuku.manager.security.SignatureGuard.Result.FDROID_SIGNED
+                        } else {
+                            moe.shizuku.manager.security.SignatureGuard.Result.UNKNOWN
+                        }
+                    } ?: moe.shizuku.manager.security.SignatureGuard.Result.UNKNOWN
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.about_signature),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = palette.variant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = moe.shizuku.manager.security.SignatureGuard.statusLabel(context, verifyResult),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = when (verifyResult) {
+                            moe.shizuku.manager.security.SignatureGuard.Result.OFFICIAL -> palette.accent
+                            else -> palette.error
+                        },
+                    )
+                }
+                fingerprint?.let { fp ->
+                    Text(
+                        text = moe.shizuku.manager.security.SignatureGuard.groupedFingerprint(fp),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        ),
+                        color = palette.variant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                moe.shizuku.manager.security.SignatureGuard.copyFingerprint(context, fp)
+                            }
+                            .padding(top = 6.dp),
+                    )
+                }
+            }
+        }
+
+        // 信息
+        item {
+            HintCard(palette = palette, modifier = Modifier.itemEntrance(3)) {
                 // 作者 / Bilibili：不把 URL 摊在界面上（那不算引导），
                 // 只给平台名 + 「打开主页」，点了用系统浏览器打开（不用内置 Custom Tabs）
                 ProfileRow(

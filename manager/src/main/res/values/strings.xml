@@ -148,6 +148,18 @@ Note, do not disable \"Developer options\" or \"USB debugging\", or Shizako will
     <string name="star_no_browser">No browser available — the project URL was copied.</string>
     <string name="about_star">Star the project</string>
     <string name="about_star_summary">Give Shizako a star on GitHub</string>    <string name="settings_recommended_apps_summary">Common apps that work with Shizako — download them in your browser</string>
+    <!-- Signature self-check (anti-clone) -->
+    <string name="about_signature">Signing certificate (SHA-256)</string>
+    <string name="sig_status_official">Official signature</string>
+    <string name="sig_status_fdroid">F-Droid signature</string>
+    <string name="sig_status_unknown">Signature could not be verified</string>
+    <string name="sig_read_failed">Could not read the certificate</string>
+    <string name="sig_warn_title">Signature does not match the official build</string>
+    <string name="sig_warn_message">This copy of Shizako was repackaged or re-signed by someone other than the developer. A forged copy can see every app you authorize through it.\n\nYour fingerprint:\n%1$s\n\nCompare it with the official fingerprint on the release page — if they differ, uninstall this copy and reinstall from the official source. Shizako will keep working for now, but use it at your own risk.</string>
+    <string name="sig_warn_open_official">Official releases</string>
+    <string name="sig_warn_copy">Copy my fingerprint</string>
+    <string name="sig_warn_understood">I understand</string>
+    <string name="sig_copied">Fingerprint copied</string>
     <string name="download_app_brevent">Brevent</string>
     <string name="download_app_brevent_desc">Prevent background apps from running without root.</string>
     <string name="download_app_stopapp">Stopapp</string>
@@ -466,6 +478,8 @@ The export function uses SAF (Storage Access Framework). It's reported that MIUI
     <string name="watchdog_notification_running">Shizako is running</string>
     <string name="watchdog_notification_waiting">Waiting for Shizako to start\u2026</string>
     <string name="watchdog_notification_crashed">Crashed %1$d times, will retry\u2026</string>
+    <string name="watchdog_notification_recovering">Not responding — low-frequency retry #%1$d every 5 min\u2026</string>
+    <string name="watchdog_notification_stopped_by_user">Service stopped by you — auto-reconnect paused</string>
     <string name="watchdog_action_kill">Kill background</string>
 
     <!-- Tasker / automation -->

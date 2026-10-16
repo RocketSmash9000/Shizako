@@ -25,23 +25,20 @@ android {
         // 用构建属性而不是 productFlavors：flavor 会把产物路径改成 apk/<flavor>/release/，
         // 影响现有发版脚本与官网下载链接；这里保持路径不变。
         versionName rootProject.ext.versionName + (fdroidBuild ? '-f' : '')
-        // 兼容性占位包的 applicationId —— 也是上游 Shizuku 的 applicationId。
-        // 只有 GitHub 版才有值；F-Droid 版为空串，于是这个字面量既不会进 DEX，
-        // 相关功能也整体关闭（见 FdroidBuild.allowCompatStub 与 StubManager）。
-        buildConfigField "String", "COMPAT_STUB_PACKAGE",
-                fdroidBuild ? '""' : '"moe.shizuku.privileged.api"'
         // 编译期开关，供 fdroid/FdroidBuild.kt 集中判断（F-Droid 版需关闭若干功能）
         buildConfigField "boolean", "FDROID_BUILD", "${fdroidBuild}"
         // 兼容桥的 provider authority（对应 AndroidManifest 里的 ${compatAuthority}）。
-        //   GitHub 版：额外声明上游 authority —— 早期客户端会直接按它寻址管理器；
-        //   F-Droid 版：只声明我们自己的 —— 上游 README 的 FORBIDDEN 条款禁止 fork
-        //   使用上游身份，F-Droid 维护者明确要求「稳妥优先、在该变体里关掉」。
+        //
+        // 两个变体都**只**声明我们自己的 authority。以前 GitHub 版会额外声明上游的
+        // moe.shizuku.privileged.api.shizuku，好处是「早期客户端直接按该 authority 寻址
+        // 管理器」；代价有两层，都是硬伤：
+        //   1. 上游 Apache-2.0 §6 禁止 fork 使用上游身份（README 的 FORBIDDEN 条款）；
+        //   2. 声明该 authority 会让本应用**无法与官方 Shizuku 共存**（provider 冲突），
+        //      这本身就像仿冒行为。
         // 实测（Android 16 + Hail / MT 管理器）：新版客户端由管理器主动把 binder 推进
-        // 客户端自己的 provider，不依赖这个 authority。
+        // 客户端自己的 provider，不依赖这个 authority，所以去掉它不影响正常使用。
         manifestPlaceholders = [
-                compatAuthority: fdroidBuild
-                        ? "com.churan.shizako.shizuku"
-                        : "com.churan.shizako.shizuku;moe.shizuku.privileged.api.shizuku"
+                compatAuthority: "com.churan.shizako.shizuku"
         ]
         externalNativeBuild {
             cmake {
@@ -155,58 +152,29 @@ materialThemeBuilder {
     generateTextColors = true
 }
 
-// ══════════ 兼容性 Stub APK 打进 assets ══════════
-// 为什么用"复制"而不是把 :stub 当依赖：stub 是个独立 application 模块，不能作为 library 被依赖；
-// 它唯一的用途就是产出那个包名为 moe.shizuku.privileged.api 的占位 APK，
-// 由 StubManager 在运行时从 assets 里解出来再 pm install。
-def stubApkFile = new File(projectDir.absolutePath, 'src/main/assets/shizako-stub.apk')
-
-tasks.register('copyStubApk') {
-    group = 'build'
-    description = '把 :stub 的 debug APK 复制到 manager/src/main/assets/shizako-stub.apk'
-    // 显式依赖跨模块任务：这样单独跑 :stub:assembleDebug 也能工作，
-    // 跑 :manager:assembleDebug 时也会先自动把 stub 编出来。
-    // F-Droid 版连 :stub 模块都没 include（见 settings.gradle），这里也就不能引用它 ——
-    // 该任务在 F-Droid 版永不被实例化（依赖它的是 removeStubApk 那条路径）。
-    if (!fdroidBuild) {
-        dependsOn ':stub:assembleDebug'
-        inputs.file("${rootProject.projectDir}/stub/build/outputs/apk/debug/stub-debug.apk")
-    }
-    // 注意：不要再把 stubApkFile（本任务自己的输出）声明成输入 —— Gradle 8 会做
-    // 输入文件存在性校验，新鲜克隆（F-Droid 构建机）上该文件尚不存在，任务会直接
-    // 报 "input file does not exist" 而拒绝执行。「文件被删后重跑」由 outputs.file
-    // 天然保证：声明过的输出缺失即视为过期。
-    outputs.file(stubApkFile)
-    doLast {
-        def src = file("${rootProject.projectDir}/stub/build/outputs/apk/debug/stub-debug.apk")
-        if (!src.exists()) {
-            throw new GradleException("stub APK 不存在：${src}（先执行 :stub:assembleDebug）")
-        }
-        stubApkFile.parentFile.mkdirs()
-        copy {
-            from src
-            into stubApkFile.parentFile
-            rename { 'shizako-stub.apk' }
-        }
-    }
-}
-
-// 手动重新生成（改了 stub 或想刷新 assets 里的 APK 时）：
-//   $env:JAVA_HOME='E:\jdk21'; $env:GRADLE_USER_HOME='E:\gh'; .\gradlew.bat :manager:copyStubApk "-Djava.io.tmpdir=E:/tmp"
-// assets 里的 APK 是产物而非源码，正常情况下不用手工动它，preBuild 会自动刷新。
+// ══════════ 兼容性占位包：已彻底移除 ══════════
+// 以前这里会把 :stub 模块产出的占位 APK（applicationId = moe.shizuku.privileged.api，
+// 应用名 "Shizuku"）复制进 manager/src/main/assets/，运行时由 StubManager 装到设备上，
+// 好让把上游包名写死在代码里的第三方应用「看得见」管理器。
 //
-// F-Droid 版（-Pfdroid）：**不构建也不打包**占位包 —— 上游 README 的 FORBIDDEN 条款禁止
-// fork 使用该 application id，维护者要求这个变体保持干净。做法是注册一个反任务，
-// 在打包前把可能残留的 assets/shizako-stub.apk 删掉（否则切换变体时旧产物会被打进 APK）。
-if (fdroidBuild) {
-    tasks.register('removeStubApk') {
-        group = 'build'
-        description = 'F-Droid 版：确保 assets 里没有兼容性占位包 APK'
-        outputs.upToDateWhen { !stubApkFile.exists() }
-        doLast {
-            if (stubApkFile.exists() && !stubApkFile.delete()) {
-                throw new GradleException("无法删除 ${stubApkFile}，F-Droid 版不应打包占位包")
-            }
+// 该做法逐字违反上游 Apache-2.0 §6 的 FORBIDDEN 条款（禁止以 moe.shizuku.privileged.api
+// 作 application id、禁止以 Shizuku 作应用名）；而且任何人解包本应用跑一次
+// `aapt2 dump badging assets/shizako-stub.apk` 就能看到那个包，从外部看与一份
+// 「重打包改名的仿冒品」无法区分 —— 这正是被社区标记为仿冒的直接证据。
+// 两个变体现在都停发它（详见 NOTICE 与 README 的「官方构建与校验」一节）。
+//
+// 这里保留一个无条件执行的清理任务：旧工作区、或从 GitHub 版切到 F-Droid 版时，
+// assets 里可能还留着上一次构建生成的占位 APK，不删掉会被重新打进 APK ——
+// 要根除的东西不能只靠「不再生成」。
+def legacyStubApkFile = new File(projectDir.absolutePath, 'src/main/assets/shizako-stub.apk')
+
+tasks.register('removeStubApk') {
+    group = 'build'
+    description = '确保 assets 里没有历史遗留的兼容性占位包 APK'
+    outputs.upToDateWhen { !legacyStubApkFile.exists() }
+    doLast {
+        if (legacyStubApkFile.exists() && !legacyStubApkFile.delete()) {
+            throw new GradleException("无法删除 ${legacyStubApkFile}，占位包不应被打进 APK")
         }
     }
 }
@@ -232,15 +200,13 @@ afterEvaluate {
     tasks.getByName('optimizeReleaseResources').finalizedBy(collapseReleaseResourceNames)
     tasks.getByName('preReleaseBuild').dependsOn(':shell:assembleRelease')
     tasks.getByName('preDebugBuild').dependsOn(':shell:assembleDebug')
-    // stub 占位 APK 必须在打包 assets 之前就位，否则第一次构建出来的 APK 里没有它。
+    // 历史遗留的 assets/shizako-stub.apk 必须在合并 assets 之前删掉，否则会被打进 APK。
     // 除了 preBuild，再直接挂到 mergeDebugAssets / mergeReleaseAssets 上：
-    // 这样即使有人单独跑 `:manager:mergeDebugAssets`，也一定会先把 APK 复制过来。
-    // F-Droid 版走反方向：确保它一定不在 assets 里（见上面的 removeStubApk）。
-    def stubTask = fdroidBuild ? 'removeStubApk' : 'copyStubApk'
-    tasks.getByName('preDebugBuild').dependsOn(stubTask)
-    tasks.getByName('preReleaseBuild').dependsOn(stubTask)
-    tasks.getByName('mergeDebugAssets').dependsOn(stubTask)
-    tasks.getByName('mergeReleaseAssets').dependsOn(stubTask)
+    // 这样即使有人单独跑 `:manager:mergeDebugAssets`，也一定会先执行清理。
+    tasks.getByName('preDebugBuild').dependsOn('removeStubApk')
+    tasks.getByName('preReleaseBuild').dependsOn('removeStubApk')
+    tasks.getByName('mergeDebugAssets').dependsOn('removeStubApk')
+    tasks.getByName('mergeReleaseAssets').dependsOn('removeStubApk')
 }
 
 android.applicationVariants.configureEach { variant ->

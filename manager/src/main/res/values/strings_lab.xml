@@ -19,17 +19,9 @@
     <string name="lab_connectors_risk_accept">I understand the risk</string>
 
     <!-- Compatibility stub -->
-    <string name="lab_stub_title">Compatibility stub</string>
-    <string name="lab_stub_installed">Installed</string>
-    <string name="lab_stub_not_installed">Not installed</string>
-    <string name="lab_stub_summary">Some apps only recognise the original Shizuku package name (%1$s) and refuse to work without it. Installing this placeholder makes them see Shizuku as available.</string>
-    <string name="lab_stub_install">Install</string>
-    <string name="lab_stub_uninstall">Uninstall</string>
-    <string name="lab_stub_working">Working…</string>
-    <string name="lab_stub_ok">Done (via %1$s).</string>
-    <string name="lab_stub_failed">Failed: %1$s</string>
-    <string name="lab_stub_note_title">About the stub</string>
-    <string name="lab_stub_note_body">The stub is a signature-only APK: it declares the same API permissions as Shizuku but implements nothing. Real privilege checks still go through Shizako itself. Installation is attempted through the Shizuku server, then root, then wireless ADB; uninstalling removes the placeholder package again.</string>
+    <!-- 已整体移除：那个占位包（applicationId = moe.shizuku.privileged.api、
+         应用名 "Shizuku"）逐字违反上游 Apache-2.0 §6 的 FORBIDDEN 条款，
+         两个变体都不再构建/打包/安装，界面入口与全部文案一并删掉。 -->
 
     <!-- Backup &amp; restore -->
     <string name="lab_backup_title">Backup and restore</string>

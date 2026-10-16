@@ -54,7 +54,6 @@ Shizako/
 ├── server/     特权服务进程（Java，跑在 shell / root 身份下）
 ├── starter/    服务启动器（负责拉起 server 并校验）
 ├── shell/      预编译的 shell 工具
-├── stub/       兼容占位包（moe.shizuku.privileged.api）
 ├── common/     共享模块
 ├── api/        Shizuku-API 客户端库源码（MIT，vendored 进本仓库）
 ├── docs/       文档、官网与物料（GitHub Pages 直接服务此目录）

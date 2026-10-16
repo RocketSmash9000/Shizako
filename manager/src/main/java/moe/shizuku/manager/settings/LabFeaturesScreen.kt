@@ -39,7 +39,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.R
-import moe.shizuku.manager.compat.StubManager
 import moe.shizuku.manager.connector.ShizukuConnectors
 import moe.shizuku.manager.ui.hint.HintCard
 import moe.shizuku.manager.ui.hint.HintNoteRow
@@ -50,8 +49,6 @@ import moe.shizuku.manager.ui.hint.HintSecondaryButton
 import moe.shizuku.manager.ui.hint.HintSectionTitle
 import moe.shizuku.manager.ui.hint.itemEntrance
 import moe.shizuku.manager.ui.hint.resolveHintPalette
-import moe.shizuku.manager.BuildConfig
-import moe.shizuku.manager.fdroid.FdroidBuild
 
 /**
  * 实验室功能页（**Compose**，不是 PreferenceFragment）。
@@ -60,9 +57,10 @@ import moe.shizuku.manager.fdroid.FdroidBuild
  * 卡片材质（玻璃 / MD3）、文字自适应、配色都来自 [resolveHintPalette]；再插一个
  * PreferenceFragment 的偏好列表，样式会和设置页其他部分对不上。
  *
- * 当前有两项功能：[ShizukuConnectors]（对第三方 Activator 暴露启动命令的 Provider 开关，
- * 首次开启必须过安全警告确认框），以及**兼容性 Stub**（安装 / 卸载包名为
- * `moe.shizuku.privileged.api` 的占位 APK，逻辑在 [StubManager]）。
+ * 当前只有一项功能开关：[ShizukuConnectors]（对第三方 Activator 暴露启动命令的 Provider 开关，
+ * 首次开启必须过安全警告确认框）。曾经还有一项「兼容性 Stub」（安装 applicationId 为上游
+ * `moe.shizuku.privileged.api` 的占位 APK），现已随整个占位包方案一并移除 ——
+ * 理由见 NOTICE 与 README 的「官方构建与校验」一节。
  * 备份 / 恢复只是入口按钮（回调由宿主提供），
  * 真正的读写逻辑在 `moe.shizuku.manager.utils.BackupRestoreUtil`。
  *
@@ -102,10 +100,6 @@ fun LabFeaturesScreen(
     var connectorsEnabled by remember { mutableStateOf(ShizukuConnectors.isEnabled(context)) }
     var showWarning by remember { mutableStateOf(false) }
 
-    // 兼容性 Stub 的安装状态：初值直接查一遍 PackageManager，之后由安装/卸载的结果写回
-    var stubInstalled by remember { mutableStateOf(StubManager.isInstalled(context)) }
-    var stubBusy by remember { mutableStateOf(false) }
-    var stubMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     HintPage(listState = state, onCollapsedChange = onCollapsedChange) {
@@ -204,95 +198,6 @@ fun LabFeaturesScreen(
                 )
             }
         }
-
-        // F-Droid 版不提供兼容性占位包（上游 README 禁止 fork 使用该 application id，
-        // F-Droid 维护者也要求在该变体里关掉），整段连同入口一起隐藏。
-    if (FdroidBuild.allowCompatStub) {
-            // 4. 兼容性 Stub：给写死原版包名的应用装一个同名占位包
-            item { HintSectionTitle(p, stringResource(R.string.lab_stub_title)) }
-            item {
-                HintCard(palette = p, modifier = Modifier.itemEntrance(3)) {
-                    // 状态文案跟着安装状态走，用户一眼能看出当前是哪种情况
-                    val stateText = stringResource(
-                        if (stubInstalled) R.string.lab_stub_installed else R.string.lab_stub_not_installed
-                    )
-                    val summary = stringResource(R.string.lab_stub_summary, BuildConfig.COMPAT_STUB_PACKAGE)
-
-                    IconBadgeRow(
-                        palette = p,
-                        iconRes = R.drawable.ic_outline_extension_24,
-                        title = stringResource(R.string.lab_stub_title),
-                        summary = "$stateText · $summary",
-                    )
-
-                    // 安装 / 卸载都是 shell + 轮询，几十毫秒到几秒不等，所以放 IO 上跑并禁用按钮防重复点
-                    if (stubInstalled) {
-                        HintSecondaryButton(
-                            palette = p,
-                            text = stringResource(R.string.lab_stub_uninstall),
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !stubBusy,
-                            onClick = {
-                                stubBusy = true
-                                stubMessage = null
-                                scope.launch {
-                                    val r = StubManager.uninstall(context)
-                                    stubInstalled = StubManager.isInstalled(context)
-                                    stubMessage = if (r.ok) {
-                                        context.getString(R.string.lab_stub_ok, r.channel)
-                                    } else {
-                                        context.getString(R.string.lab_stub_failed, r.error ?: "")
-                                    }
-                                    stubBusy = false
-                                }
-                            },
-                        )
-                    } else {
-                        HintPrimaryButton(
-                            palette = p,
-                            text = stringResource(R.string.lab_stub_install),
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !stubBusy,
-                            onClick = {
-                                stubBusy = true
-                                stubMessage = null
-                                scope.launch {
-                                    val r = StubManager.install(context)
-                                    stubInstalled = StubManager.isInstalled(context)
-                                    stubMessage = if (r.ok) {
-                                        context.getString(R.string.lab_stub_ok, r.channel)
-                                    } else {
-                                        context.getString(R.string.lab_stub_failed, r.error ?: "")
-                                    }
-                                    stubBusy = false
-                                }
-                            },
-                        )
-                    }
-
-                    if (stubBusy || stubMessage != null) {
-                        Text(
-                            text = stubMessage ?: stringResource(R.string.lab_stub_working),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = p.variant,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
-                }
-            }
-
-            item {
-                HintCard(palette = p, modifier = Modifier.itemEntrance(4)) {
-                    HintNoteRow(
-                        palette = p,
-                        iconRes = R.drawable.ic_outline_info_24,
-                        title = stringResource(R.string.lab_stub_note_title),
-                        body = stringResource(R.string.lab_stub_note_body),
-                    )
-                }
-            }
-    }
-
 
         // 5. 备份与恢复（宿主给了回调才显示）
         if (onBackup != null || onRestore != null) {

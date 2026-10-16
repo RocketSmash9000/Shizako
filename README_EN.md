@@ -53,7 +53,7 @@ Compatible with the [Shizuku-API](https://github.com/RikkaApps/Shizuku-API) ecos
 | First-run wizard | Step-by-step setup (language / appearance / activation method) with activation built in; 10-second forced disclaimer |
 | Four activation paths | Root / wireless debugging / computer ADB / Dhizuku, all on one page; one-tap start once paired |
 | One-tap injection | Grant privileges to common tools (Thanox, Ice Box, 炼妖壶 …), with in-app download for missing ones |
-| Compatibility bridge | Built-in provider relay so older clients that only know the legacy package name still connect |
+| Compatibility bridge | Built-in provider relay so Shizuku-API clients connect unchanged; it declares **only its own authority and claims no upstream identifier** |
 | Tasker support | Broadcasts to start/stop the service, activate Dhizuku, query status, trigger downloads |
 | API audit log | Records which app called which privileged API — review it any time in settings |
 | Auto update | Checks for a new version **every time you open the app**, with an in-app download dialog; falls back to a working mirror when GitHub is blocked by your network |
@@ -108,9 +108,37 @@ The server only checks *that* an app requested the permission, not *which* permi
 - Every Dhizuku-API app needs approval on first use; grants are stored in a local allowlist and revocable under "Dhizuku authorized apps"
 - The compatibility layer is written independently (wire protocol aligned with Dhizuku-API) and does not depend on the GPL-licensed Dhizuku-API library, so Shizako stays Apache-2.0
 
-### ⚠️ One important limitation
+### 🔏 Coexisting with the official Shizuku, and verifying an official build
 
-Shizako's compatibility bridge occupies the official provider authority `moe.shizuku.privileged.api.shizuku`, so **it cannot be installed alongside the official Shizuku** (Android reports a provider conflict). Pick one.
+Shizako uses **its own** package name (`com.churan.shizako`) and permission names, and its provider
+declares only its own authority, `com.churan.shizako.shizuku`. It does not use the upstream
+`moe.shizuku.privileged.api` package name, the `Shizuku` app name, `moe.shizuku.manager.permission.*`
+permissions, the upstream provider authority or upstream icons. It therefore **can be installed
+alongside the official Shizuku**; whichever one is running is the one your apps talk to.
+(Historically the GitHub build shipped a "compatibility placeholder package" that squatted the
+upstream package name to please clients with the old name hard-coded. That approach has been removed
+entirely: it violated the upstream Apache-2.0 §6 terms verbatim, and from the outside it was
+indistinguishable from a repackaged, renamed counterfeit.)
+
+#### Signing fingerprint of official builds
+
+Every official build is signed with the same release certificate:
+
+| Item | Value |
+| --- | --- |
+| Certificate subject | `CN=Shizako, OU=Churan, O=Churan, L=Beijing, ST=Beijing, C=CN` |
+| Certificate SHA-256 | `515BAF0C727F2AFBABA8A22379A05F8F2CC98682E5BEB24FB166565ACC9F9C8A` |
+
+To verify, either:
+
+1. Run `apksigner verify --print-certs shizako-*.apk` on a computer and compare the line above, or
+2. Open **Settings → About** inside the app: it shows the fingerprint of **the APK you actually
+   installed**. Compare that with the table. On launch, a mismatch also triggers a warning that
+   points you to the official release page (warn-only, never blocks; F-Droid builds don't warn).
+
+A mismatch means the APK was repackaged and re-signed. **Do not install it and do not grant it
+anything.** F-Droid builds are re-signed with F-Droid's own key, so their fingerprint differs by
+design; trust the one shown on the F-Droid listing.
 
 ---
 
@@ -194,7 +222,6 @@ Shizako/
 ├── server/     Privileged server process (Java, runs as shell / root)
 ├── starter/    Service starter
 ├── shell/      Prebuilt shell tools
-├── stub/       Compatibility placeholder package (moe.shizuku.privileged.api)
 ├── common/     Shared code
 ├── api/        Shizuku-API client library sources (MIT)
 └── docs/       Documentation and artwork
@@ -208,10 +235,10 @@ Shizako/
 No. Wireless debugging or USB is enough; root simply adds more options.
 
 **How does this relate to Shizuku?**
-It is compatible with the Shizuku-API ecosystem — apps built on the official SDK connect without changes. Per the upstream license it ships its own package and permission names, so it cannot coexist with the official Shizuku; on top of that it adds Dhizuku compatibility, one-tap injection and more.
+It is compatible with the Shizuku-API ecosystem — apps built on the official SDK connect without changes. Per the upstream license it ships its own package and permission names and claims no upstream authority, so it can coexist with the official Shizuku; on top of that it adds Dhizuku compatibility, one-tap injection and more.
 
 **Can it coexist with the official Shizuku?**
-No — the compatibility bridge conflicts on the provider authority. Pick one.
+Yes. Shizako's provider declares only its own authority, so it does not clash with the official Shizuku. Install both and authorise each separately.
 
 **Is granting privileges to apps safe?**
 Every app requires your explicit approval on first connect; the allowlist is local and revocable, and Dhizuku privilege forwarding stays inside the Shizako process.
@@ -246,8 +273,25 @@ Because the author raises her like a daughter (confirmed).
 Licensed under the upstream [Apache License 2.0](LICENSE); see also [NOTICE](NOTICE).
 
 - Original copyright belongs to RikkaApps; modifications copyright 初然
-- Does not use the upstream `Shizuku` name, the `moe.shizuku.privileged.api` package name, `moe.shizuku.manager.permission.*` permissions, or upstream icons
+- Does not use the upstream `Shizuku` name, the `moe.shizuku.privileged.api` package name, `moe.shizuku.manager.permission.*` permissions, the upstream provider authority, or upstream icons
 - The `api/` directory keeps its own MIT License
+
+### Name and artwork (brand)
+
+Following the same form as the upstream addendum to Apache-2.0 §6, this project states:
+
+- You are **FORBIDDEN** to use `Shizako` (including `Shizako+`, `Shizako Plus`, `Shizako Pro` or any
+  other confusingly similar variant) as the name of a third-party application, or as part of its
+  package name / application id / permission names;
+- You are **FORBIDDEN** to use this project's mascot artwork or launcher icons
+  (`manager/src/main/res/mipmap*/ic_launcher*.png` and all related assets) for anything other
+  than displaying Shizako itself;
+- You are **FORBIDDEN** to distribute any non-official build under the application id
+  `com.churan.shizako`.
+
+In short: fork the code all you like (you are welcome to) — **change the name, the icons and the
+package name**. That keeps you compliant with Apache-2.0 and lets users tell official builds apart,
+which is the single most effective anti-counterfeiting measure there is.
 
 ---
 

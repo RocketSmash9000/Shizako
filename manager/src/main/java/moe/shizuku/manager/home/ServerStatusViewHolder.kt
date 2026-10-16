@@ -60,6 +60,8 @@ class ServerStatusViewHolder(private val binding: HomeServerStatusBinding, root:
                 .setMessage(R.string.dialog_stop_message)
                 .setPositiveButton(android.R.string.ok) { _: android.content.DialogInterface?, _: Int ->
                     try {
+                        // 手动停止：通知看门狗这是主人的明确操作，别 3 秒后又拉起来
+                        moe.shizuku.manager.watchdog.WatchdogService.noteIntentionalStop()
                         Shizuku.exit()
                     } catch (e: Throwable) {
                     }

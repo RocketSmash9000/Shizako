@@ -250,6 +250,8 @@
     <string name="watchdog_notification_running">Shizako酱 正在运行中</string>
     <string name="watchdog_notification_waiting">等待 Shizako酱 启动中…</string>
     <string name="watchdog_notification_crashed">已崩溃 %1$d 次，将重试…</string>
+    <string name="watchdog_notification_recovering">服务没有响应 —— 已进入低频重试（第 %1$d 次，每 5 分钟一次）…</string>
+    <string name="watchdog_notification_stopped_by_user">服务已被主人手动停止 —— 自动重连暂时压住了</string>
     <string name="watchdog_action_kill">杀后台</string>
 
     <!-- Tasker / automation -->
@@ -389,6 +391,18 @@
     <string name="star_no_browser">没找到能打开的浏览器，项目地址已经复制</string>
     <string name="about_star">给项目点个 Star</string>
     <string name="about_star_summary">在 GitHub 上给 Shizako酱 一颗星</string>
+    <!-- 签名自检（防伪） -->
+    <string name="about_signature">签名证书（SHA-256）</string>
+    <string name="sig_status_official">官方签名</string>
+    <string name="sig_status_fdroid">F-Droid 签名</string>
+    <string name="sig_status_unknown">签名无法确认</string>
+    <string name="sig_read_failed">读取签名证书失败</string>
+    <string name="sig_warn_title">签名与官方版本不符</string>
+    <string name="sig_warn_message">这份 Shizako酱 被人重新打包或换过签名，不是开发者发布的原版。仿冒品能看到主人通过它授权的每一个应用。\n\n当前安装包的指纹：\n%1$s\n\n请与发布页公布的官方指纹对照 —— 对不上就卸载这份、从官方渠道重装。现在她还能继续用，但风险请主人自己掂量。</string>
+    <string name="sig_warn_open_official">官方发布页</string>
+    <string name="sig_warn_copy">复制我的指纹</string>
+    <string name="sig_warn_understood">我已了解</string>
+    <string name="sig_copied">指纹已复制</string>
     <string name="settings_recommended_apps_summary">支持 Shizako酱 的常用应用，点进去用浏览器下载</string>
     <string name="download_app_brevent">黑阈（Brevent）</string>
     <string name="download_app_brevent_desc">不用 Root 就能阻止后台应用偷偷跑。</string>

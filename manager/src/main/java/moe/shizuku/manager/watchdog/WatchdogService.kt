@@ -31,6 +31,11 @@ import rikka.shizuku.Shizuku
  * - 系统级：前台常驻服务 + 划掉时 onTaskRemoved 立刻自拉起 + 闹钟兜底；
  * - ADB 级：shell 侧小看门（[KeepAliveDaemon]，走本机 ADB 5555 驻守），
  *   App 被系统杀掉时由它用 `am` 把服务拉回来；
+ * - 断线重连三级策略：binder 死亡 → 3 秒后快重试（×3）→ 仍失败进入低频恢复
+ *   （每 5 分钟探测 + 拉起一次，直到成功）；看门狗自己被拉起来而 binder 从未上报时
+ *   （开机 / 闹钟拉回）走「冷恢复」主动探测一次；
+ * - 手动「停止服务」通过 [noteIntentionalStop] 压制自动重连 30 分钟 ——
+ *   保活不推翻主人的明确操作；
  * - 常驻通知上带「杀后台」按钮：想关的时候一键撤保活并完全退场。
  */
 class WatchdogService : Service() {
@@ -43,18 +48,14 @@ class WatchdogService : Service() {
         private const val MAX_CONSECUTIVE_CRASHES = 3
         private const val CRASH_WINDOW_MS = 5 * 60 * 1000L
 
-        private const val ACTION_STOP = "com.churan.shizako.action.WATCHDOG_STOP"
-        private const val ACTION_KILL = "com.churan.shizako.action.WATCHDOG_KILL"
+        /** 快重试（3 次 × 3s）拉不起来 → 进入低频重试：每 5 分钟探测并尝试拉起一次，直到 binder 回来。 */
+        private const val RECOVERY_INTERVAL_MS = 5 * 60 * 1000L
 
-        /** 划掉 / 被杀后的闹钟自拉起（WatchdogRestartReceiver 接收）。 */
-        private const val ACTION_RESTART = "com.churan.shizako.action.WATCHDOG_RESTART"
-        private const val RESTART_REQUEST_CODE = 40
-        private const val KILL_REQUEST_CODE = 41
-        private const val RESTART_ALARM_DELAY_MS = 2_500L
+        /** 冷恢复：看门狗自己被拉起来时（开机 / 闹钟拉回 / 桥服务 poke），binder 从未上报过 —— 死亡回调不会来，只能主动探测。 */
+        private const val COLD_RECOVERY_DELAY_MS = 5_000L
 
-        @Volatile
-        var isRunning = false
-            private set
+        /** 主人手动「停止服务」后，自动重连至少静默 30 分钟（看门狗的保活不应推翻主人的明确操作）。 */
+        private const val SUPPRESS_AFTER_INTENTIONAL_STOP_MS = 30 * 60 * 1000L
 
         /**
          * 预期内的暂停窗口：AdbStarter 切 TCP 端口 / 重启 adbd 时，服务会短暂“死”一下。
@@ -69,6 +70,35 @@ class WatchdogService : Service() {
 
         private fun inExpectedDeathWindow(): Boolean =
             SystemClock.elapsedRealtime() < expectedDeathUntilMs
+
+        /**
+         * 手动「停止服务」前调用：既放过紧随其后的死亡回调，也把自动重连压 30 分钟 ——
+         * 否则看门狗会在 3 秒后把刚停掉的服务又拉起来（死亡回调 = 崩溃，照样触发重连）。
+         */
+        fun noteIntentionalStop() {
+            expectDeathWindow(30_000L)
+            suppressAutoRestartUntilMs =
+                SystemClock.elapsedRealtime() + SUPPRESS_AFTER_INTENTIONAL_STOP_MS
+        }
+
+        @Volatile
+        private var suppressAutoRestartUntilMs = 0L
+
+        private fun autoRestartSuppressed(): Boolean =
+            SystemClock.elapsedRealtime() < suppressAutoRestartUntilMs
+
+        private const val ACTION_STOP = "com.churan.shizako.action.WATCHDOG_STOP"
+        private const val ACTION_KILL = "com.churan.shizako.action.WATCHDOG_KILL"
+
+        /** 划掉 / 被杀后的闹钟自拉起（WatchdogRestartReceiver 接收）。 */
+        private const val ACTION_RESTART = "com.churan.shizako.action.WATCHDOG_RESTART"
+        private const val RESTART_REQUEST_CODE = 40
+        private const val KILL_REQUEST_CODE = 41
+        private const val RESTART_ALARM_DELAY_MS = 2_500L
+
+        @Volatile
+        var isRunning = false
+            private set
 
         fun start(context: Context) {
             runCatching {
@@ -136,11 +166,31 @@ class WatchdogService : Service() {
     private var wasRunning = false
     private var consecutiveCrashes = 0
     private var lastCrashTime = 0L
+    /** 快重试没拉起来 → true：进入每 5 分钟一次的低频重试。 */
+    private var inRecoveryMode = false
+    private var recoveryAttempts = 0
 
-    private val restartRunnable = Runnable {
-        if (!Shizuku.pingBinder()) {
+    private val restartRunnable: Runnable = Runnable {
+        if (!Shizuku.pingBinder() && !autoRestartSuppressed()) {
             restartShizuku()
         }
+    }
+
+    /** 低频重试：失败不罢休，每 [RECOVERY_INTERVAL_MS] 探测并尝试拉起一次，binder 回来才停。 */
+    private val recoveryRunnable: Runnable = Runnable {
+        if (Shizuku.pingBinder()) {
+            // binder 已被别处拉起（主人手动启动等）：退出恢复模式
+            handler.removeCallbacks(recoveryRunnable)
+            inRecoveryMode = false
+            recoveryAttempts = 0
+        } else if (!autoRestartSuppressed()) {
+            recoveryAttempts++
+            restartShizuku()
+            handler.postDelayed(recoveryRunnable, RECOVERY_INTERVAL_MS)
+        } else {
+            handler.postDelayed(recoveryRunnable, RECOVERY_INTERVAL_MS)
+        }
+        updateNotification()
     }
 
     private lateinit var binderReceivedListener: Shizuku.OnBinderReceivedListener
@@ -155,6 +205,11 @@ class WatchdogService : Service() {
             wasRunning = true
             consecutiveCrashes = 0
             lastCrashTime = 0L
+            // 服务真的回来了 → 解除手动停止的压制（主人后来又手动启动过 = 恢复保活语义）
+            suppressAutoRestartUntilMs = 0L
+            handler.removeCallbacks(recoveryRunnable)
+            inRecoveryMode = false
+            recoveryAttempts = 0
             updateNotification()
             // 服务回来了 → 确认 shell 小看门在岗（「用 ADB 保活」）
             KeepAliveDaemon.ensureRunningAsync(this)
@@ -162,10 +217,10 @@ class WatchdogService : Service() {
 
         binderDeadListener = Shizuku.OnBinderDeadListener {
             if (inExpectedDeathWindow()) {
-                // 预期内的死亡（TCP 切换 / 重启 adbd）：就地消掉窗口，不安排重启
+                // 预期内的死亡（TCP 切换 / 重启 adbd / 手动停止）：就地消掉窗口，不安排重启
                 expectedDeathUntilMs = 0L
                 wasRunning = false
-            } else if (wasRunning) {
+            } else if (wasRunning && !autoRestartSuppressed()) {
                 val now = System.currentTimeMillis()
                 if (now - lastCrashTime > CRASH_WINDOW_MS) {
                     consecutiveCrashes = 0
@@ -175,7 +230,14 @@ class WatchdogService : Service() {
 
                 if (consecutiveCrashes <= MAX_CONSECUTIVE_CRASHES) {
                     handler.postDelayed(restartRunnable, RESTART_DELAY_MS)
+                } else {
+                    // 快重试 3 次仍没回来：放弃高频重试，转入低频恢复（每 5 分钟一次，直到成功）
+                    handler.removeCallbacks(recoveryRunnable)
+                    inRecoveryMode = true
+                    handler.postDelayed(recoveryRunnable, RECOVERY_INTERVAL_MS)
                 }
+                wasRunning = false
+            } else {
                 wasRunning = false
             }
             updateNotification()
@@ -208,6 +270,16 @@ class WatchdogService : Service() {
         // 后台保活：确保 shell 小看门在岗（用 ADB spawn；拿不到 ADB / root 时静默失败，下次触发再试）
         KeepAliveDaemon.ensureRunningAsync(this)
 
+        // 冷恢复：进程重启（开机 / 闹钟拉回 / 桥服务 poke）后 binder 从未上报 —— 死亡回调不会来，
+        // 只能在这里主动探测一次。条件：以前确实成功激活过（mode 已记录）且主人没有刚手动停过服务。
+        if (!Shizuku.pingBinder()
+            && !inExpectedDeathWindow()
+            && !autoRestartSuppressed()
+            && ShizukuSettings.getLastLaunchMode() != ShizukuSettings.LaunchMethod.UNKNOWN
+        ) {
+            handler.postDelayed(restartRunnable, COLD_RECOVERY_DELAY_MS)
+        }
+
         return START_STICKY
     }
 
@@ -231,6 +303,7 @@ class WatchdogService : Service() {
     override fun onDestroy() {
         isRunning = false
         handler.removeCallbacks(restartRunnable)
+        handler.removeCallbacks(recoveryRunnable)
         Shizuku.removeBinderReceivedListener(binderReceivedListener)
         Shizuku.removeBinderDeadListener(binderDeadListener)
         super.onDestroy()
@@ -272,12 +345,15 @@ class WatchdogService : Service() {
         val title = getString(R.string.watchdog_notification_title)
         val text = if (running) {
             getString(R.string.watchdog_notification_running)
+        } else if (autoRestartSuppressed()) {
+            // 主人刚手动停过服务：如实汇报「已按主人要求保持停止」，不假装在抢救
+            getString(R.string.watchdog_notification_stopped_by_user)
+        } else if (inRecoveryMode) {
+            getString(R.string.watchdog_notification_recovering, recoveryAttempts)
+        } else if (consecutiveCrashes > 0) {
+            getString(R.string.watchdog_notification_crashed, consecutiveCrashes)
         } else {
-            if (consecutiveCrashes > 0) {
-                getString(R.string.watchdog_notification_crashed, consecutiveCrashes)
-            } else {
-                getString(R.string.watchdog_notification_waiting)
-            }
+            getString(R.string.watchdog_notification_waiting)
         }
 
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

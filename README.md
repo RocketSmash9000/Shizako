@@ -187,9 +187,9 @@ cd Shizako
 
 | 依赖 | 版本 |
 |------|------|
-| JDK | 17 及以上 |
+| JDK | **21**（根 `build.gradle` 是 `VERSION_21`、`manager` 是 `jvmTarget = "21"`；仓库未声明 toolchain，直接用 `JAVA_HOME`，**17 编译不过**） |
 | Android SDK | compileSdk 36 |
-| NDK | 29.0.13113456 |
+| NDK | 29.0.14206865 |
 
 - 国内网络已配好阿里云 Maven 镜像，无需额外代理
 - 产物在 `manager/build/outputs/apk/release/`
@@ -212,16 +212,28 @@ cd Shizako
 
 ## 🗂️ 源码结构
 
+共 **10 个 Gradle 模块**（以 `settings.gradle` 为准）：
+
 ```
 Shizako/
-├── manager/    Android 应用本体（Kotlin）
-├── server/     特权服务进程（Java，跑在 shell / root 里）
-├── starter/    服务启动器
-├── shell/      预编译的 shell 工具
-├── common/     共享模块
-├── api/        Shizuku-API 客户端库源码（MIT）
-└── docs/       文档与物料
+├── manager/          Android 应用本体（Kotlin，约 3.2 万行，占全仓 ~82%）
+├── server/           特权服务进程（Java，跑在 shell / root 里）
+├── starter/          服务启动器（启动 server 进程）
+├── shell/            构建 rish_shizuku.dex（`ShizukuShellLoader`），供 manager 打包进 APK
+├── common/           共享工具（BuildUtils / OsUtils）
+├── api/              内置的 Shizuku-API（MIT）—— 下含 6 个子模块：
+│   ├── aidl/           AIDL 接口定义
+│   ├── shared/         客户端与服务端共用的常量
+│   ├── api/            客户端库（rikka.shizuku.Shizuku）
+│   ├── provider/       客户端侧 ShizukuProvider
+│   ├── server-shared/  服务端共用基类
+│   └── rish/           rish 命令行工具的 native 部分
+├── hidden-api-stub/  hidden API 编译期桩
+└── docs/             文档与物料（官网由 tools/md2html.py 从这里生成）
 ```
+
+> `api/` 内的 6 个模块在 `settings.gradle` 里被改写 projectDir 指向 `api/<name>`，
+> 所以顶层看不到它们的目录名。
 
 ---
 

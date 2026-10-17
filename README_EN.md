@@ -191,9 +191,9 @@ cd Shizako
 
 | Requirement | Version |
 |-------------|---------|
-| JDK | 17+ |
+| JDK | **21** (root `build.gradle` uses `VERSION_21` and `manager` sets `jvmTarget = "21"`; no toolchain is declared, so `JAVA_HOME` is used as-is — **17 will not build**) |
 | Android SDK | compileSdk 36 |
-| NDK | 29.0.13113456 |
+| NDK | 29.0.14206865 |
 
 - Aliyun Maven mirrors are preconfigured (no extra proxy needed in mainland China)
 - Output: `manager/build/outputs/apk/release/`
@@ -216,16 +216,28 @@ cd Shizako
 
 ## 🗂️ Project layout
 
+**10 Gradle modules** (per `settings.gradle`):
+
 ```
 Shizako/
-├── manager/    Android app (Kotlin)
-├── server/     Privileged server process (Java, runs as shell / root)
-├── starter/    Service starter
-├── shell/      Prebuilt shell tools
-├── common/     Shared code
-├── api/        Shizuku-API client library sources (MIT)
-└── docs/       Documentation and artwork
+├── manager/          Android app (Kotlin, ~32k lines — ~82% of the repo)
+├── server/           Privileged server process (Java, runs as shell / root)
+├── starter/          Service starter (launches the server process)
+├── shell/            Builds rish_shizuku.dex (`ShizukuShellLoader`), bundled into the APK
+├── common/           Shared utilities (BuildUtils / OsUtils)
+├── api/              Vendored Shizuku-API (MIT) — contains 6 submodules:
+│   ├── aidl/           AIDL interface definitions
+│   ├── shared/         Constants shared by client and server
+│   ├── api/            Client library (rikka.shizuku.Shizuku)
+│   ├── provider/       Client-side ShizukuProvider
+│   ├── server-shared/  Shared server-side base classes
+│   └── rish/           Native part of the rish CLI tool
+├── hidden-api-stub/  Compile-time hidden-API stubs
+└── docs/             Documentation and artwork (the website is generated from here)
 ```
+
+> The 6 modules inside `api/` have their `projectDir` rewritten to `api/<name>` in
+> `settings.gradle`, which is why their directory names don't appear at the top level.
 
 ---
 

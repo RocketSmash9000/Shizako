@@ -25,6 +25,18 @@
 > fork 侧 failed 是环境噪声。
 > 现在等 review；第 4 节列了可能被追问的点。
 
+> ## 现状（截至 2026-10-17，zako3.16hp）
+>
+> - 应用侧已到 **zako3.16hp**（versionCode 仍 **316**，只有 `versionName` 加 `hp` 后缀，
+>   沿用 `zako3.01-hp` 的处理方式）。zako3.16 移除了整套兼容占位包（`:stub` 模块、
+>   `copyStubApk`、`StubManager`），3.16hp 又修了配对资源回收与看门狗恢复出口。
+> - **recipe 仍有意留在 `zako3.15` / versionCode 315**（`f1a8e59`），尚未前移 ——
+>   前移时机与要改的那一处措辞见仓库 `issues/fdroid-zako316-跟进.md`。
+>   注意：3.16 起 `MaintainerNotes` 里「只有 F-Droid 变体才停发占位包」这句已不准确，
+>   因为 GitHub 版也一并拔除了；前移 pin 时请顺带改掉。
+> - 前移 pin 需要的新值：`versionName: zako3.16`、`versionCode: 316`、
+>   `commit:` 指向 `zako3.16` 对应提交；`CurrentVersion` / `CurrentVersionCode` 同步。
+>
 > ## 现状（截至 2026-10-16，zako3.15）
 >
 > - reviewer **linsui 亲手试用后报了两个问题**：配对配不上；配对失败之后仍显示「已配对」。
@@ -66,14 +78,17 @@ F-Droid 不用 GitHub，走 **GitLab**：
 
 ## 2. 两个硬拦路虎 —— 均已解决
 
-### 2.1 仓库里有预编译二进制 —— 已解决（提交 `ee9a0d7`）
+### 2.1 仓库里有预编译二进制 —— 已解决，且第二个已彻底消失
+
+仓库里**没有任何预编译二进制入库**。当前 `manager/src/main/assets/` 只有两个文件：
 
 | 文件 | 现状 |
 |---|---|
-| `manager/src/main/assets/shizako-stub.apk` | ✅ 已解除 git 跟踪；构建时由 `:stub` 源码构建 + `copyStubApk` 拷入 assets |
-| `manager/src/main/assets/rish_shizuku.dex` | ✅ 本就未入库（`.gitignore` 忽略），由 `:shell:assemble` 构建时生成 |
+| `manager/src/main/assets/rish` | 启动脚本（882 B），随源码入库 |
+| `manager/src/main/assets/rish_shizuku.dex` | ✅ 未入库（`.gitignore` 忽略），由 `:shell:assemble` 构建时生成 |
+| ~~`manager/src/main/assets/shizako-stub.apk`~~ | ✅ **已彻底移除（zako3.16）**：`:stub` 模块、`copyStubApk` 任务、`StubManager` 全部删除，占位包不再构建也不再打包。同时 `manager/build.gradle` 里保留了一个无条件的 `removeStubApk` 清理任务，防止旧工作区里的历史文件被重新打进 APK |
 
-验证过：删掉盘上的 stub 后重新构建，产物里仍含这两个文件（新鲜克隆等价场景）。
+验证过：删掉盘上的生成物后重新构建，产物里仍含 `rish` / `rish_shizuku.dex`（新鲜克隆等价场景）。
 
 ### 2.2 构建环境：离线 + 国内镜像 + NDK —— 已解决
 
@@ -93,8 +108,8 @@ F-Droid 不用 GitHub，走 **GitLab**：
 | 事项 | 影响 |
 |---|---|
 | **签名不同** | F-Droid 用它自己的密钥签名 APK → 用户**无法从 GitHub 版覆盖升级**（必须卸载重装）。这是 F-Droid 的固有限制，几乎所有应用都这样。stub 的权限是 `dangerous` 级（校验在本体），换签名后运行时无碍 ✔ |
-| **版本号规范** | `versionName` 是 `zako3.13`（F-Droid 版 `-f` 后缀），recipe 里 `versionCode: 313`，**每次发版递增**（目前 313 ✔） |
-| **与官方 Shizuku 冲突** | 兼容桥占用了官方 provider authority，两者不能共存。F-Droid 审核可能会问，需要在 MR 里**主动说明**这是刻意设计（`README` 里已写明） |
+| **版本号规范** | `versionName` 形如 `zako3.16`（F-Droid 版带 `-f` 后缀），recipe 里 `versionCode` **每次发版递增**。当前应用侧已是 `zako3.16hp` / versionCode **316**，但 recipe 有意仍停在 `zako3.15` / **315**（前移时机见文首「现状」） |
+| **与官方 Shizuku 的关系** | **可以共存**。两个变体都只声明自己的 authority `com.churan.shizako.shizuku`，不再声明上游 authority，因此不会与官方 Shizuku 冲突（旧版曾声明上游 authority，那时的确不能共存 —— 该行为已在 zako3.16 移除，见 `manager/build.gradle` 里 `manifestPlaceholders` 上方的注释）。F-Droid 审核若问起，按此说明：自用 authority、不占用上游任何标识 |
 
 ## 4. 审核可能追问的点（提前准备答复）
 
@@ -117,18 +132,40 @@ F-Droid 不用 GitHub，走 **GitLab**：
 
 ## 6. 本机构建环境备忘（给以后的会话）
 
-- **必须经 ASCII junction 构建**：项目在 `E:\工作区\Shizako-KernelSU-UI`（中文路径），
-  AGP 拒绝非 ASCII 路径（`android.overridePathCheck` 可绕，但 AIDL 增量任务仍会
-  撞 GBK/UTF-8 解码错乱）。仓库已建 junction：
-  `mklink /J E:\build\Shizako-KernelSU-UI "E:\工作区\Shizako-KernelSU-UI"`
-  —— **一律在 `E:\build\Shizako-KernelSU-UI` 下执行 gradlew**（不复制、不产生第二份仓库）。
-- 环境变量：`JAVA_HOME=E:\jdk21`，`GRADLE_USER_HOME=E:\gh`，tmp `-Djava.io.tmpdir=E:/tmp`。
+> 以下为 **2026-10-17 实测可用**的环境；已随项目迁移更新过一次（见下方「已过期」）。
+
+- **仓库位置**：`E:\DeepSeek Work\Shizako-KernelSU-UI-Desktop-20261001`
+  （全 ASCII，只含一个空格 —— 实测可直接构建，无需 junction）。
+- **环境变量**（构建前设置，缺一不可）：
+  - `JAVA_HOME = E:\DeepSeek Work\_tools\sdk\jdk\jdk-21.0.2`
+    —— **必须 JDK 21**：根 `build.gradle` 是 `VERSION_21`、`manager` 是 `jvmTarget = "21"`，
+    仓库未声明 toolchain，Gradle 直接用 `JAVA_HOME`。用 JDK 8/17 会在编译阶段失败。
+  - `GRADLE_USER_HOME = E:\DeepSeek Work\_tools\gradle-home`
+    —— 依赖缓存与 wrapper 发行包都在这里（**不在** `~/.gradle`）。
+- **Android SDK**：`E:\DeepSeek Work\_tools\sdk`（写在 `local.properties` 的 `sdk.dir`）。
+- **代理**：GitHub 相关操作走 `127.0.0.1:7890`；Gradle 访问官方仓库时需显式给 JVM 传代理
+  （系统代理只有 PowerShell/WinINET 用，Java 不读）：
+  ```
+  -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7890
+  ```
+  本地依赖已齐全时可加 `--offline` 跳过网络。
 - **切换变体时给 `-Pkotlin.incremental=false`**：`-Pfdroid` 翻转 BuildConfig 常量
   触发 K2 增量重编，会出现一批「同模块兄弟类 Unresolved」的幽灵报错
   （报错位置漂移、import 行起头）→ 见到这个形态先怀疑增量缓存，加参数重跑，
   或删 `manager/build/kotlin` + 杀 Kotlin daemon。
-- 本机 Gradle 访问国外仓库（google/central/plugin portal）需临时代理：
-  `-Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7890 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7890`
-  （系统代理 127.0.0.1:7890 只有 PowerShell/WinINET 用，Java 不读）。
-- 发版构建 GitHub 版时记得：AGP 会清掉同变体旧产物，两个包不会同时留在
-  `manager/build/outputs/apk/release/`，需要两个就及时把产物拷进 `out/apk/`。
+- **签名**：`signing.properties` 在仓库根（被 gitignore）。注意 `signing.gradle` 是
+  `apply from` 在 **`manager/build.gradle` 末尾**，所以 `file(...)` 相对 **`manager/`** 解析，
+  写 `../shizako.jks` 指向仓库根的 `shizako.jks` 才对。**该文件读不到时 `signing.gradle`
+  会静默回落到 debug 签名** —— 发版前务必用 `apksigner verify --print-certs` 核对指纹。
+- **发版构建 GitHub 版时记得**：AGP 会清掉同变体旧产物，两个包不会同时留在
+  `manager/build/outputs/apk/release/`；需要保留就及时把产物拷进 `out/apk/`
+  （`:manager:assembleRelease` 的 `doLast` 也会自动往 `out/apk/` 拷一份）。
+
+### 已过期，不要照抄
+
+- ~~必须经 ASCII junction `E:\build\Shizako-KernelSU-UI` 构建~~ —— 那是项目还在
+  `E:\工作区\Shizako-KernelSU-UI`（**中文路径**）时的事；项目已迁到上面那个 ASCII 路径，
+  junction 与 `android.overridePathCheck` 都不再需要。
+- ~~`JAVA_HOME=E:\jdk21`、`GRADLE_USER_HOME=E:\gh`、`-Djava.io.tmpdir=E:/tmp`~~ ——
+  这些是旧机器的路径。另外 `E:/tmp` 这种绝对临时目录**绝对不要**写进被跟踪的
+  `gradle.properties`（CI 与 F-Droid 构建机是 Linux，会秒挂，见该文件注释）。

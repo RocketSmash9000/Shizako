@@ -6,9 +6,9 @@
 
 | 依赖 | 版本 | 说明 |
 |------|------|------|
-| JDK | **17 及以上** | 构建脚本与 AGP 需要；JDK 21 亦可 |
+| JDK | **21** | 根 `build.gradle` 是 `VERSION_21`、`manager` 是 `jvmTarget = "21"`。仓库**未声明 toolchain**，Gradle 直接用 `JAVA_HOME`，所以必须是 21：**JDK 17 会在编译阶段失败** |
 | Android SDK | **compileSdk 36** | 需要 `platforms;android-36` 与 `build-tools;36.0.0` |
-| NDK | **29.0.13113456** | `manager` / `rish` 里含 JNI 代码，缺了会在 CMake 阶段失败 |
+| NDK | **29.0.14206865** | `manager` / `rish` 里含 JNI 代码，缺了会在 CMake 阶段失败 |
 | Gradle | 随仓库的 wrapper | 不要用系统里的旧 Gradle |
 
 ## 克隆与编译

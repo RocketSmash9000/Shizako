@@ -27,7 +27,6 @@ import androidx.navigation.fragment.findNavController
 import moe.shizuku.manager.AppConstants
 import moe.shizuku.manager.R
 import moe.shizuku.manager.databinding.FragmentSubPageBinding
-import moe.shizuku.manager.ui.hint.HintPalette
 import moe.shizuku.manager.ui.hint.resolveHintPalette
 import moe.shizuku.manager.ui.theme.setShizakoContent
 
@@ -123,7 +122,7 @@ class AdbPairingTutorialFragment : Fragment() {
     private fun isNotificationEnabled(): Boolean {
         val context = requireContext()
         val nm = context.getSystemService(NotificationManager::class.java)
-        val channel = nm.getNotificationChannel(AdbPairingService.notificationChannel)
+        val channel = nm.getNotificationChannel(AdbPairingService.NOTIFICATIONCHANNEL)
         return nm.areNotificationsEnabled() &&
             (channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE)
     }

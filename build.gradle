@@ -25,25 +25,6 @@ subprojects {
 }
 
 apply from: 'api/manifest.gradle'
-// git 信息只用于展示（versionCode / versionName 都是写死的，跟 git 无关）。
-// 注意：Groovy 的 'cmd'.execute([], dir) 会给子进程传一个**空环境**，PATH 随之丢失。
-// 在 Windows 开发机上 git 因此取不到，text 是空字符串，原来直接 Integer.parseInt("")
-// 会让整个构建在配置阶段就挂掉（For input string: ""）。取不到就用默认值。
-def gitCommitId = ''
-def gitCommitCount = 0
-try {
-    def id = 'git rev-parse --short HEAD'.execute([], project.rootDir).text.trim()
-    if (id) {
-        gitCommitId = id
-    }
-    def count = 'git rev-list --count HEAD'.execute([], project.rootDir).text.trim()
-    if (count) {
-        gitCommitCount = Integer.parseInt(count)
-    }
-} catch (Throwable ignored) {
-    // 环境里没有可用的 git：保持默认值，不影响构建
-}
-def baseVersionName = "${api_version_major}.6.0"
 ext {
     // versionCode 跟 versionName 走（不是 git 提交数）：3.01 → 301，
     // 这样每次发版只要改 versionName，升级判断自然成立

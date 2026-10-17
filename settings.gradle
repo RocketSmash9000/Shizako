@@ -37,14 +37,17 @@ pluginManagement {
         }
     }
     plugins {
-        id("com.android.application") version "8.10.1"
-        id("com.android.library") version "8.10.1"
-        id("org.jetbrains.kotlin.android") version "2.2.21"
-        id("org.jetbrains.kotlin.plugin.compose") version "2.2.21"
+        id("com.android.application") version '8.13.2'
+        id("com.android.library") version '8.13.2'
+        id("org.jetbrains.kotlin.android") version "2.4.21"
+        id("org.jetbrains.kotlin.plugin.compose") version "2.4.21"
         id("dev.rikka.tools.autoresconfig") version "1.2.2"
         id("dev.rikka.tools.materialthemebuilder") version "1.5.1"
         id("dev.rikka.tools.refine") version "4.4.0"
     }
+}
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
@@ -114,7 +117,7 @@ if (propFile.canRead()) {
     props.load(new FileInputStream(propFile))
 
     if (props != null) {
-        if (props["api.useLocal"].equals("true")) {
+        if (props["api.useLocal"] == "true") {
             root = props["api.dir"]
         }
     }

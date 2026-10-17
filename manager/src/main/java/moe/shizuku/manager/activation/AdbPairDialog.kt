@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -291,7 +290,7 @@ fun AdbPairDialog(
                             scope.launch(Dispatchers.IO) {
                                 // 候选地址：回环优先，回环连不上时改用本机局域网地址兜底
                                 // （部分设备/ROM 上应用连不上自己的 127.0.0.1，见 AdbPairingClient 类注释）
-                                val hosts = AdbPairingClient.candidateHosts(context)
+                                val hosts = AdbPairingClient.candidateHosts()
                                 // 配对期间的密钥只留在内存里，配对真的成功才落盘：
                                 // 一次失败的尝试不该在本地留下一把 adbd 不认识的密钥，
                                 // 否则激活页会把它当成「已配对」的证据（用户根本没配上）。

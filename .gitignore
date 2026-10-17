@@ -27,3 +27,4 @@ KernelSU-UI重构说明.md
 .cxx/
 *.keystore
 /captures
+gradle/gradle-daemon-jvm.properties

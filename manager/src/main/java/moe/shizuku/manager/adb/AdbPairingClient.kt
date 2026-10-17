@@ -47,7 +47,6 @@ private class PeerInfo(
 
     enum class Type(val value: Byte) {
         ADB_RSA_PUB_KEY(0.toByte()),
-        ADB_DEVICE_GUID(0.toByte()),
     }
 
     fun writeTo(buffer: ByteBuffer) {
@@ -113,7 +112,7 @@ private class PairingPacketHeader(
             val type = buffer.get()
             val payload = buffer.int
 
-            if (version < kMinSupportedKeyHeaderVersion || version > kMaxSupportedKeyHeaderVersion) {
+            if (version !in kMinSupportedKeyHeaderVersion..kMaxSupportedKeyHeaderVersion) {
                 Log.e(TAG, "PairingPacketHeader version mismatch (us=$kCurrentKeyHeaderVersion them=${version})")
                 return null
             }
@@ -121,7 +120,7 @@ private class PairingPacketHeader(
                 Log.e(TAG, "Unknown PairingPacket type=${type}")
                 return null
             }
-            if (payload <= 0 || payload > kMaxPayloadSize) {
+            if (payload !in 1..kMaxPayloadSize) {
                 Log.e(TAG, "header payload not within a safe payload size (size=${payload})")
                 return null
             }
@@ -201,7 +200,7 @@ class AdbPairingClient(private val hosts: List<String>, private val port: Int, p
                 throw e
             }
 
-            try {
+            use {
                 state = State.ExchangingMsgs
                 doExchangeMsgs()
 
@@ -210,10 +209,6 @@ class AdbPairingClient(private val hosts: List<String>, private val port: Int, p
 
                 state = State.Stopped
                 return
-            } finally {
-                // 建连成功但后续握手失败时，原生上下文同样必须销毁；close() 内部先关流、
-                // 再销毁上下文，顺序不能反（destroy 之后 pairingContext 不可再用）。
-                close()
             }
         }
 
@@ -226,7 +221,7 @@ class AdbPairingClient(private val hosts: List<String>, private val port: Int, p
         // 必须带超时：配对时用户可能停在系统「使用配对码配对设备」对话框里不动，
         // 而 connect / 握手 / 读包任何一步永久阻塞，都会让通知一直停在「配对中」、
         // 对话框按钮永远禁用（只能杀进程恢复）。数值与 AdbClient 保持一致（10s / 15s）。
-        socket = java.net.Socket().apply {
+        socket = Socket().apply {
             tcpNoDelay = true
             connect(java.net.InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
         }
@@ -348,15 +343,15 @@ class AdbPairingClient(private val hosts: List<String>, private val port: Int, p
     private fun closeSockets() {
         try {
             if (::inputStream.isInitialized) inputStream.close()
-        } catch (e: Throwable) {
+        } catch (_: Throwable) {
         }
         try {
             if (::outputStream.isInitialized) outputStream.close()
-        } catch (e: Throwable) {
+        } catch (_: Throwable) {
         }
         try {
             if (::socket.isInitialized) socket.close()
-        } catch (e: Throwable) {
+        } catch (_: Throwable) {
         }
     }
 
@@ -389,7 +384,7 @@ class AdbPairingClient(private val hosts: List<String>, private val port: Int, p
          * 绝大多数设备用回环就够了（也是原来的行为），局域网地址只在回环连不上时兜底 ——
          * 见 [AdbPairingClient] 的类注释。拿不到局域网地址就只用回环。
          */
-        fun candidateHosts(context: android.content.Context): List<String> {
+        fun candidateHosts(): List<String> {
             val list = mutableListOf("127.0.0.1")
             runCatching { moe.shizuku.manager.utils.NetworkUtils.findLanIpv4() }
                 .getOrNull()

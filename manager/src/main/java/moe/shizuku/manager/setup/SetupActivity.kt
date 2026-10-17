@@ -545,7 +545,7 @@ class SetupActivity : AppActivity() {
         // 这里又是 onCreate 的必经路径 —— 不挡的话，7.x 一进引导页就闪退，
         // 而没走完引导就永远被 MainActivity 重定向回来，等于整个 App 打不开。
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true
-        val channel = nm.getNotificationChannel(AdbPairingService.notificationChannel)
+        val channel = nm.getNotificationChannel(AdbPairingService.NOTIFICATIONCHANNEL)
         return channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
     }
 }

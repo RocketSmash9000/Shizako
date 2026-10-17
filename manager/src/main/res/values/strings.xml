@@ -56,9 +56,9 @@
 
 Note, do not disable \"Developer options\" or \"USB debugging\", or Shizako will be stopped."</string>
     <string name="dialog_adb_discovery_message_toggle_wireless_debugging">Please try to disable and enable \"Wireless debugging\" if it keeps searching.</string>
-    <string name="dialog_adb_port">Port</string>
-    <string name="dialog_adb_port_auto_filled">Detected automatically. Change it if your device shows a different port.</string>
-    <string name="dialog_adb_port_manual_hint">Type the pairing port shown on your device\'s wireless debugging screen.</string>
+    <string name="dialog_adb_port">Pairing port</string>
+    <string name="dialog_adb_port_auto_filled">Pairing port detected automatically. Change it if your device shows a different port.</string>
+    <string name="dialog_adb_port_manual_hint">Type the port shown in the \"Pair device with pairing code\" dialog.\nNote: this is NOT the port in the \"IP address &amp; port\" line at the top of the wireless debugging screen — that one is the connect port, and pairing will fail at the encrypted handshake if you use it.</string>
     <string name="dialog_adb_invalid_port">Port is an integer ranging from 1 to 65535.</string>
     <string name="adb_pairing">Pairing</string>
     <string name="dialog_adb_pairing_title">Pair with device</string>
@@ -71,10 +71,10 @@ Note, do not disable \"Developer options\" or \"USB debugging\", or Shizako will
     <string name="dialog_adb_pairing_message">Please start paring by the following steps: \"Developer Options\" - \"Wireless debugging\" - \"Pairing device using pairing code\".\n\nAfter the pairing process starts, you will able to input the pairing code.</string>
     <string name="adb_pairing_requires_multi_window">Please enter split-screen (multi-window) mode first.</string>
     <string name="adb_pairing_requires_multi_window_reason">The system requires the pairing dialog always visible, using split-screen mode is the only way to let this app and system dialog visible at the same time.</string>
-    <string name="dialog_adb_pairing_mdns_timeout">Pairing service not found. mDNS multicast is probably blocked by the system, a VPN or a firewall — this happens on GrapheneOS with a VPN enabled and on some Huawei / HarmonyOS devices. Enter the port manually; you can find it on the wireless debugging screen.</string>
+    <string name="dialog_adb_pairing_mdns_timeout">Pairing service not found. mDNS multicast is probably blocked by the system, a VPN or a firewall — this happens on GrapheneOS with a VPN enabled and on some Huawei / HarmonyOS devices. Enter the pairing port manually: open the \"Pair device with pairing code\" dialog — the port shown there is the pairing port (the \"IP address &amp; port\" line at the top of the page is the connect port and will not work).</string>
     <string name="adb_error_key_store">Unable to generate key for wireless debugging.\nThis may be because KeyStore mechanism of this device is broken.</string>
     <string name="adb_pair_required">Please go through the pairing step first.</string>
-    <string name="pairing_handshake_failed">Cannot establish a secure connection to the pairing service. The port or the pairing code has probably expired - the system pairing dialog is only valid while it stays open. Reopen it and try again.</string>
+    <string name="pairing_handshake_failed">Cannot establish a secure connection to the pairing service.\n\nA common cause is a wrong port: if you used the one in the \"IP address &amp; port\" line at the top of the wireless debugging screen, that is the connect port, not the pairing port — use the port shown in the \"Pair device with pairing code\" dialog instead.\n\nThe other possibility is an expired pairing code (it dies the moment that dialog closes) — reopen the dialog and try again.</string>
     <string name="pairing_failed_protocol">Pairing was interrupted by the device. Reopen the system \"Pair with device\" dialog and try again.</string>
     <string name="pairing_failed_unknown">Pairing failed. Reopen the system \"Pair with device\" dialog and try again.</string>
     <string name="development_settings">Developer options</string>

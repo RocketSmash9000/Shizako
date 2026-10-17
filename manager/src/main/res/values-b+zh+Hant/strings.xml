@@ -64,9 +64,9 @@
     <string name="settings_translation">參與翻譯</string>
     <string name="settings_translation_summary">協助我們將 %s 翻譯至您的語言</string>
     <string name="dialog_stop_message">Shizako 服務將被停止。</string>
-    <string name="dialog_adb_port">通訊埠</string>
-    <string name="dialog_adb_port_auto_filled">已自動偵測到通訊埠。若與裝置上顯示的通訊埠不同，請手動修改。</string>
-    <string name="dialog_adb_port_manual_hint">請依裝置「無線偵錯」頁面顯示的配對通訊埠手動填寫。</string>
+    <string name="dialog_adb_port">配對通訊埠</string>
+    <string name="dialog_adb_port_auto_filled">已自動偵測到配對通訊埠。若與裝置上顯示的通訊埠不同，請手動修改。</string>
+    <string name="dialog_adb_port_manual_hint">請填「使用配對碼配對裝置」對話方塊裡顯示的通訊埠。\n注意：不是「無線偵錯」頁面頂端「IP 位址和通訊埠」那個 —— 那個是連線通訊埠，填了會在建立加密連線時失敗。</string>
     <string name="dialog_adb_invalid_port">通訊埠是一個 1 至 65535 的整數。</string>
     <string name="dialog_adb_pairing_paring_code">配對碼</string>
     <string name="home_wireless_adb_title">透過無線偵錯啟動</string>
@@ -78,7 +78,7 @@
     <string name="adb_error_key_store">無法為無線偵錯產生金鑰。
 \n這可能是因為此裝置上的 KeyStore 機制已損壞。</string>
     <string name="adb_pair_required">請先進行配對步驟。</string>
-    <string name="pairing_handshake_failed">無法與配對服務建立加密連線：連接埠或配對碼可能已失效（系統「使用配對碼配對裝置」對話方塊一關，配對碼就作廢）。請重新開啟對話方塊後再試一次。</string>
+    <string name="pairing_handshake_failed">無法與配對服務建立加密連線。\n\n常見的原因之一是通訊埠填錯：如果你填的是「無線偵錯」頁面頂端「IP 位址和通訊埠」裡那個，那是連線通訊埠，不是配對通訊埠 —— 請改用「使用配對碼配對裝置」對話方塊裡顯示的通訊埠。\n\n另一種可能是配對碼已失效（該對話方塊一關，配對碼就作廢），請重新開啟對話方塊後再試一次。</string>
     <string name="pairing_failed_protocol">配對被裝置中斷了。請重新開啟系統「使用配對碼配對裝置」對話方塊，再試一次。</string>
     <string name="pairing_failed_unknown">配對失敗。請重新開啟系統「使用配對碼配對裝置」對話方塊，再試一次。</string>
     <string name="action_stop">你狠心放弃Shizako酱吗</string>

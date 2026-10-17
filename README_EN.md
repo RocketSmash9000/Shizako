@@ -90,16 +90,22 @@ Open an app you want to authorize; Shizako shows a permission dialog. Approve to
 
 The `api/` directory contains the full [Shizuku-API](https://github.com/RikkaApps/Shizuku-API) sources (MIT License). Protocol, interfaces and call patterns are identical to upstream — see [api/SHIZAKO-CHANGES.md](api/SHIZAKO-CHANGES.md) for what changed.
 
-### Official-ecosystem apps connect directly
+### Which apps can actually connect
 
-New name, same temper. Apps built on the official `dev.rikka.shizuku:api` (MT Manager, Ice Box, SystemUI Tuner, …) connect **without code changes or recompiling**:
+**The important part first**: apps built on the official `dev.rikka.shizuku:api` **cannot connect to Shizako** — they have to be rebuilt against this repository's API. See the second row below.
 
-| App built against | Connects to Shizuku | Connects to Shizako |
-|-------------------|:---:|:---:|
-| Official `dev.rikka.shizuku:api` | ✅ | ✅ |
-| This repository's `api/` | ✅ | ✅ |
+The reason is discovery. To obtain the binder, a client queries a provider whose address comes from the `ShizukuProvider.MANAGER_APPLICATION_ID` it was compiled with:
 
-The server only checks *that* an app requested the permission, not *which* permission name it requested; the first connection still requires your approval.
+| Client built against | Provider authority it queries | Permission it requests | Connects to Shizuku | Connects to Shizako |
+|---|---|:---:|:---:|:---:|
+| Official `dev.rikka.shizuku:api` | `moe.shizuku.privileged.api.shizuku` | `moe.shizuku.manager.permission.API_V23` | ✅ | ❌ |
+| This repository's `api/` (constants changed) | `com.churan.shizako.shizuku` | `com.churan.shizako.permission.API_V23` | ✅ (requests both) | ✅ |
+
+Shizako uses its own applicationId and permission names, as the upstream license requires, so an official-API app looks for her at the old address and finds nothing. **This is a deliberate trade-off, not a bug, and it cannot be worked around without violating the upstream Apache-2.0 §6 additional terms.**
+
+There is exactly one way to connect such an app: **rebuild it against this repository's `api/`**. The change is tiny (two constants), and the app's author can usually add a build variant; `api/SHIZAKO-CHANGES.md` records what changed.
+
+> If the app you want is a published one that will not be rebuilt for you (Orion Store, MT Manager, …), it will only ever talk to official Shizuku. The two managers can coexist — Shizako uses its own applicationId and does not conflict with official Shizuku. Alternatively, check whether that app supports Dhizuku (next section): Shizako can act as its own Dhizuku.
 
 ### Dhizuku compatibility: she is her own Device Owner
 

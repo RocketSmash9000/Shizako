@@ -89,16 +89,22 @@
 
 `api/` 目录装着 [Shizuku-API](https://github.com/RikkaApps/Shizuku-API) 的完整源码（MIT License）。通信协议、接口、调用方式与上游同一套 —— 具体改动见 [api/SHIZAKO-CHANGES.md](api/SHIZAKO-CHANGES.md)。
 
-### 官方生态应用直连
+### 哪些应用能连上她
 
-改了名字，没改脾气。用官方 `dev.rikka.shizuku:api` 写的应用（MT 管理器、冰箱、SystemUI Tuner 等）**不用改代码、不用重编译**，装好就连：
+**先说要紧的那句**：用官方 `dev.rikka.shizuku:api` 编译的应用**连不上 Shizako**，需要用它自己的 API 重新编译 —— 见下表第二行。
 
-| 什么应用 | 连官方 Shizuku | 连 Shizako |
-|----------|:---:|:---:|
-| 官方 `dev.rikka.shizuku:api` 写的 | ✅ | ✅ |
-| 用本仓库 `api/` 写的 | ✅ | ✅ |
+原因是发现方式：客户端要拿到 binder，得去 query 一个 provider，地址由它编译时用的 `ShizukuProvider.MANAGER_APPLICATION_ID` 决定：
 
-服务端只校验「是否请求了权限」，不校验「请求了哪个权限名」；首次连接照样弹授权框，你点头才算数。
+| 客户端编译时用的库 | 它去找的 provider authority | 它请求的权限 | 连官方 Shizuku | 连 Shizako |
+|---|---|:---:|:---:|:---:|
+| 官方 `dev.rikka.shizuku:api` | `moe.shizuku.privileged.api.shizuku` | `moe.shizuku.manager.permission.API_V23` | ✅ | ❌ |
+| 本仓库 `api/`（改过常量） | `com.churan.shizako.shizuku` | `com.churan.shizako.permission.API_V23` | ✅（双权限请求） | ✅ |
+
+Shizako 按上游许可要求使用自己的 applicationId 与权限名，所以官方 API 应用按老地址找不到她 —— **这是设计取舍，不是 bug，也无法在不违反上游 Apache-2.0 §6 附加条款的前提下绕过**。
+
+想让她连上，只有一条路：**用本仓库 `api/` 重新编译那个客户端**。改的地方很少（两个常量），已编译好的应用作者通常也愿意加一个构建变体；`api/SHIZAKO-CHANGES.md` 记了具体改了什么。
+
+> 如果你要连的是 Orion Store / MT 管理器这类**已发布且不会为你重编译**的应用：它们只认官方 Shizuku。可以两个管理器并存 —— Shizako 用自己的 applicationId，与官方 Shizuku 互不冲突。或者看看它是否支持 Dhizuku（见下一节），Shizako 可以充当自己的 Dhizuku。
 
 ### Dhizuku 兼容：她是自己的设备所有者
 

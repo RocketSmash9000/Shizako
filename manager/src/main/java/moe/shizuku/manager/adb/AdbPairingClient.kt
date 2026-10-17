@@ -384,13 +384,17 @@ class AdbPairingClient(private val hosts: List<String>, private val port: Int, p
          * 绝大多数设备用回环就够了（也是原来的行为），局域网地址只在回环连不上时兜底 ——
          * 见 [AdbPairingClient] 的类注释。拿不到局域网地址就只用回环。
          */
-        fun candidateHosts(): List<String> {
-            val list = mutableListOf("127.0.0.1")
+        fun candidateHosts(preferredHost: String? = null): List<String> {
+            val list = mutableListOf<String>()
+            preferredHost
+                ?.takeIf { it.isNotBlank() && it != "127.0.0.1" }
+                ?.let(list::add)
+            list.add("127.0.0.1")
             runCatching { moe.shizuku.manager.utils.NetworkUtils.findLanIpv4() }
                 .getOrNull()
                 ?.takeIf { it.isNotBlank() && it != "127.0.0.1" }
-                ?.let { list.add(it) }
-            return list
+                ?.let(list::add)
+            return list.distinct()
         }
 
         @JvmStatic

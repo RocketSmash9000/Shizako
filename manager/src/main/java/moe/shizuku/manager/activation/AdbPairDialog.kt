@@ -52,6 +52,7 @@ import moe.shizuku.manager.adb.AdbKeyException
 import moe.shizuku.manager.adb.AdbMdns
 import moe.shizuku.manager.adb.AdbPairingClient
 import moe.shizuku.manager.adb.AdbPairingFailedException
+import moe.shizuku.manager.adb.AdbServiceEndpoint
 import moe.shizuku.manager.adb.AdbPairingState
 import moe.shizuku.manager.adb.DeferredAdbKeyStore
 import moe.shizuku.manager.adb.PreferenceAdbKeyStore
@@ -87,6 +88,7 @@ fun AdbPairDialog(
     var pairingCode by remember { mutableStateOf("") }
     var portError by remember { mutableStateOf<String?>(null) }
     var pairingCodeError by remember { mutableStateOf<String?>(null) }
+    var discoveredHost by remember { mutableStateOf<String?>(null) }
     /**
      * 与具体输入框无关的失败原因（握手断了、协议数据异常……）。
      *
@@ -123,10 +125,11 @@ fun AdbPairDialog(
         scanning = true
         scanTimedOut = false
         discoveredPort = -1
-        val adbMdns = AdbMdns(context, AdbMdns.TLS_PAIRING) { port ->
-            discoveredPort = port
-            if (port in 1..65535) {
-                portText = port.toString()
+        val adbMdns = AdbMdns(context, AdbMdns.TLS_PAIRING) { endpoint: AdbServiceEndpoint ->
+            discoveredHost = endpoint.host
+            discoveredPort = endpoint.port
+            if (endpoint.port in 1..65535) {
+                portText = endpoint.port.toString()
                 portError = null
                 scanning = false
                 scanTimedOut = false
@@ -290,7 +293,7 @@ fun AdbPairDialog(
                             scope.launch(Dispatchers.IO) {
                                 // 候选地址：回环优先，回环连不上时改用本机局域网地址兜底
                                 // （部分设备/ROM 上应用连不上自己的 127.0.0.1，见 AdbPairingClient 类注释）
-                                val hosts = AdbPairingClient.candidateHosts()
+                                val hosts = AdbPairingClient.candidateHosts(discoveredHost)
                                 // 配对期间的密钥只留在内存里，配对真的成功才落盘：
                                 // 一次失败的尝试不该在本地留下一把 adbd 不认识的密钥，
                                 // 否则激活页会把它当成「已配对」的证据（用户根本没配上）。

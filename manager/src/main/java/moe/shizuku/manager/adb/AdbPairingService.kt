@@ -62,8 +62,11 @@ class AdbPairingService : Service() {
     }
 
     private var adbMdns: AdbMdns? = null
+    private var pairingHost: String? = null
 
-    private val observer = Observer<Int> { port ->
+    private val observer = Observer<AdbServiceEndpoint> { endpoint ->
+        pairingHost = endpoint.host
+        val port = endpoint.port
         Log.i(TAG, "Pairing service port: $port")
         if (port <= 0) return@Observer
 
@@ -166,7 +169,7 @@ class AdbPairingService : Service() {
         GlobalScope.launch(Dispatchers.IO) {
             // 候选地址：回环优先，回环连不上时改用本机局域网地址兜底
             // （部分设备/ROM 上应用连不上自己的 127.0.0.1，见 AdbPairingClient 类注释）
-            val hosts = AdbPairingClient.candidateHosts()
+            val hosts = AdbPairingClient.candidateHosts(pairingHost)
 
             val preferences = ShizukuSettings.getPreferences()
             // 配对期间的密钥只留内存，配对成功才落盘 —— 一次失败的尝试不该留在本地，

@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 @RequiresApi(Build.VERSION_CODES.R)
 class AdbMdns(
     context: Context, private val serviceType: String,
-    private val observer: Observer<Int>
+    private val observer: Observer<AdbServiceEndpoint>
 ) {
 
     @Volatile
@@ -92,14 +92,19 @@ class AdbMdns(
     }
 
     private fun onServiceLost(info: NsdServiceInfo) {
-        if (info.serviceName == serviceName) observer.onChanged(-1)
+        if (info.serviceName == serviceName) observer.onChanged(AdbServiceEndpoint(null, -1))
     }
 
     private fun onServiceResolved(resolvedService: NsdServiceInfo) {
         // 端口必须真的有人在监听（adbd 起来后才会 bind），再上报
         if (running && isPortInUse(resolvedService.port)) {
             serviceName = resolvedService.serviceName
-            observer.onChanged(resolvedService.port)
+            observer.onChanged(
+                AdbServiceEndpoint(
+                    host = resolvedService.host?.hostAddress,
+                    port = resolvedService.port
+                )
+            )
         }
         drainResolveQueue()
     }
@@ -186,3 +191,8 @@ class AdbMdns(
         const val TAG = "AdbMdns"
     }
 }
+
+data class AdbServiceEndpoint(
+    val host: String?,
+    val port: Int
+)

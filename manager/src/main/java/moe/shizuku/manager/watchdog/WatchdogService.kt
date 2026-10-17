@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -34,6 +35,9 @@ import rikka.shizuku.Shizuku
  * - 断线重连三级策略：binder 死亡 → 3 秒后快重试（×3）→ 仍失败进入低频恢复
  *   （每 5 分钟探测 + 拉起一次，直到成功）；看门狗自己被拉起来而 binder 从未上报时
  *   （开机 / 闹钟拉回）走「冷恢复」主动探测一次；
+ *   低频恢复**有出口**：当前配置下无从拉起（如 ADB 激活但 5555 不通又没法自动开无线调试）
+ *   或试满 [RECOVERY_MAX_ATTEMPTS] 次就停表，通知改为如实说明「已放弃自动重连」，
+ *   不再每 5 分钟空转；
  * - 手动「停止服务」通过 [noteIntentionalStop] 压制自动重连 30 分钟 ——
  *   保活不推翻主人的明确操作；
  * - 常驻通知上带「杀后台」按钮：想关的时候一键撤保活并完全退场。
@@ -41,6 +45,7 @@ import rikka.shizuku.Shizuku
 class WatchdogService : Service() {
 
     companion object {
+        private const val TAG = "WatchdogService"
         private const val CHANNEL_ID = "watchdog"
         private const val NOTIFICATION_ID = 1002
 
@@ -50,6 +55,13 @@ class WatchdogService : Service() {
 
         /** 快重试（3 次 × 3s）拉不起来 → 进入低频重试：每 5 分钟探测并尝试拉起一次，直到 binder 回来。 */
         private const val RECOVERY_INTERVAL_MS = 5 * 60 * 1000L
+
+        /**
+         * 低频重试的尝试上限（12 次 ≈ 1 小时）。到顶就停表并如实告知，不再无限空转 ——
+         * 无限每 5 分钟唤醒换不来成功，只换来电量与一条永远在「正在重试」的通知。
+         * 重新激活（binder 回来）会把计数清零，所以正常使用不会碰到这个上限。
+         */
+        private const val RECOVERY_MAX_ATTEMPTS = 12
 
         /** 冷恢复：看门狗自己被拉起来时（开机 / 闹钟拉回 / 桥服务 poke），binder 从未上报过 —— 死亡回调不会来，只能主动探测。 */
         private const val COLD_RECOVERY_DELAY_MS = 5_000L
@@ -169,6 +181,8 @@ class WatchdogService : Service() {
     /** 快重试没拉起来 → true：进入每 5 分钟一次的低频重试。 */
     private var inRecoveryMode = false
     private var recoveryAttempts = 0
+    /** 恢复已停表：当前配置下拉不起来（无从下手）或已试满上限，通知需要如实说明。 */
+    private var recoveryUnavailable = false
 
     private val restartRunnable: Runnable = Runnable {
         if (!Shizuku.pingBinder() && !autoRestartSuppressed()) {
@@ -183,14 +197,35 @@ class WatchdogService : Service() {
             handler.removeCallbacks(recoveryRunnable)
             inRecoveryMode = false
             recoveryAttempts = 0
+            recoveryUnavailable = false
         } else if (!autoRestartSuppressed()) {
             recoveryAttempts++
-            restartShizuku()
-            handler.postDelayed(recoveryRunnable, RECOVERY_INTERVAL_MS)
+            if (!restartShizuku()) {
+                // 当前配置下拉不起来（上次 ADB 激活、但 5555 不通又无法自动开无线调试）。
+                // 继续每 5 分钟空转没有意义：停表并如实告知，别让通知一直宣称「正在重试」。
+                giveUpRecovery("no viable restart path for last launch mode")
+            } else if (recoveryAttempts >= RECOVERY_MAX_ATTEMPTS) {
+                giveUpRecovery("exceeded $RECOVERY_MAX_ATTEMPTS low-frequency attempts")
+            } else {
+                handler.postDelayed(recoveryRunnable, RECOVERY_INTERVAL_MS)
+            }
         } else {
             handler.postDelayed(recoveryRunnable, RECOVERY_INTERVAL_MS)
         }
         updateNotification()
+    }
+
+    /**
+     * 停止低频恢复并如实汇报。
+     *
+     * 保留 [inRecoveryMode] = true 是为了让通知显示「已放弃自动重连」而不是倒回
+     * 「已崩溃 %d 次，将重试…」——后者会让主人继续等一件不会发生的事。
+     * 注意这里不清 [recoveryAttempts]：通知里要显示试了多少次。
+     */
+    private fun giveUpRecovery(reason: String) {
+        Log.w(TAG, "Giving up low-frequency recovery: $reason")
+        handler.removeCallbacks(recoveryRunnable)
+        recoveryUnavailable = true
     }
 
     private lateinit var binderReceivedListener: Shizuku.OnBinderReceivedListener
@@ -210,6 +245,7 @@ class WatchdogService : Service() {
             handler.removeCallbacks(recoveryRunnable)
             inRecoveryMode = false
             recoveryAttempts = 0
+            recoveryUnavailable = false
             updateNotification()
             // 服务回来了 → 确认 shell 小看门在岗（「用 ADB 保活」）
             KeepAliveDaemon.ensureRunningAsync(this)
@@ -234,6 +270,7 @@ class WatchdogService : Service() {
                     // 快重试 3 次仍没回来：放弃高频重试，转入低频恢复（每 5 分钟一次，直到成功）
                     handler.removeCallbacks(recoveryRunnable)
                     inRecoveryMode = true
+                    recoveryUnavailable = false
                     handler.postDelayed(recoveryRunnable, RECOVERY_INTERVAL_MS)
                 }
                 wasRunning = false
@@ -348,6 +385,9 @@ class WatchdogService : Service() {
         } else if (autoRestartSuppressed()) {
             // 主人刚手动停过服务：如实汇报「已按主人要求保持停止」，不假装在抢救
             getString(R.string.watchdog_notification_stopped_by_user)
+        } else if (recoveryUnavailable) {
+            // 恢复已停表：别再说「正在重试」，把可行的下一步告诉主人
+            getString(R.string.watchdog_notification_recovery_gave_up)
         } else if (inRecoveryMode) {
             getString(R.string.watchdog_notification_recovering, recoveryAttempts)
         } else if (consecutiveCrashes > 0) {
@@ -387,10 +427,19 @@ class WatchdogService : Service() {
         }
     }
 
-    private fun restartShizuku() {
-        when (ShizukuSettings.getLastLaunchMode()) {
+    /**
+     * 按上次成功的激活方式拉起服务。
+     *
+     * @return true 表示**确实发起了一次拉起尝试**（结果由 binder 回调给出）；false 表示
+     * 当前配置下根本无从下手（例如上次是 ADB 激活，但 5555 不通、又没拿到
+     * WRITE_SECURE_SETTINGS 无法自动开无线调试）。低频恢复循环必须看这个返回值 ——
+     * 否则会每 5 分钟空转一次、永远等不到成功，而通知还在宣称「正在重试」。
+     */
+    private fun restartShizuku(): Boolean {
+        return when (ShizukuSettings.getLastLaunchMode()) {
             ShizukuSettings.LaunchMethod.ROOT -> {
                 ServiceStartHelper.startRoot()
+                true
             }
             ShizukuSettings.LaunchMethod.ADB -> {
                 if (ShizukuSettings.isTcpMode() && EnvironmentUtils.isAdbPortLive(AdbStarter.TCP_MODE_PORT)) {
@@ -400,10 +449,17 @@ class WatchdogService : Service() {
                             AdbStarter.start("127.0.0.1", AdbStarter.TCP_MODE_PORT, applicationContext)
                         }
                     }
+                    true
                 } else if (ServiceStartHelper.canAdbAutoStart(this)) {
                     ServiceStartHelper.startAdb(this)
+                    true
+                } else {
+                    // 无从下手：不能自动开无线调试，5555 也不通。交给调用方停表并如实告知。
+                    Log.w(TAG, "Cannot restart: last launch mode is ADB but neither TCP 5555 nor auto wireless-debugging is available")
+                    false
                 }
             }
+            else -> false
         }
     }
 }

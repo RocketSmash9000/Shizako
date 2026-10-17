@@ -307,8 +307,14 @@ fun AdbPairDialog(
                                     }
                                     return@launch
                                 }
+                                // use{} 保证 socket 与原生配对上下文一定被回收（start() 内部也有
+                                // finally 清理，这里再套一层是防止将来有人改动 start() 的清理逻辑）。
+                                // 原先这里既没 use 也没 close：每次配对尝试（含失败重试）都会泄漏
+                                // 两个 fd + 一块持有 SPAKE2 密钥的原生内存。
                                 val result = runCatching {
-                                    AdbPairingClient(host, port, pairingCode, key).start()
+                                    AdbPairingClient(host, port, pairingCode, key).use { client ->
+                                        client.start()
+                                    }
                                 }
                                 withContext(Dispatchers.Main) {
                                     isPairing = false

@@ -171,9 +171,15 @@ class AdbPairingService : Service() {
                 return@launch
             }
 
-            AdbPairingClient(host, port, code, key).runCatching {
-                start()
-            }.onFailure {
+            // use{} 保证 socket 与原生配对上下文一定被回收（start() 内部也做了 finally 清理，
+            // 这里再套一层是防止将来有人改动 start() 的清理逻辑）。原先这里既没 use 也没 close：
+            // 每次配对（含失败重试）都泄漏两个 fd + 一块持有 SPAKE2 密钥的原生内存。
+            val result = runCatching {
+                AdbPairingClient(host, port, code, key).use { client ->
+                    client.start()
+                }
+            }
+            result.onFailure {
                 handleResult(false, it)
             }.onSuccess {
                 keyStore.commit()

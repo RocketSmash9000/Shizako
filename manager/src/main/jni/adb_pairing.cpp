@@ -75,8 +75,12 @@ static jlong PairingContext_Constructor(JNIEnv *env, jclass clazz, jboolean isCl
     }
     env->ReleaseByteArrayElements(jPassword, pswd, 0);
 
-    auto ctx = (PairingContextNative *) malloc(sizeof(PairingContextNative));
-    memset(ctx, 0, sizeof(PairingContextNative));
+    auto ctx = (PairingContextNative *) calloc(1, sizeof(PairingContextNative));
+    if (ctx == nullptr) {
+        LOGE("Unable to allocate the pairing context.");
+        SPAKE2_CTX_free(spake2_ctx);
+        return 0;
+    }
     ctx->spake2_ctx = spake2_ctx;
     memcpy(ctx->key, key, SPAKE2_MAX_MSG_SIZE);
     ctx->key_size = key_size;
@@ -84,7 +88,16 @@ static jlong PairingContext_Constructor(JNIEnv *env, jclass clazz, jboolean isCl
 }
 
 static jbyteArray PairingContext_Msg(JNIEnv *env, jobject obj, jlong ptr) {
+    if (ptr == 0) {
+        return nullptr;
+    }
+
     auto ctx = (PairingContextNative *) ptr;
+    if (ctx->spake2_ctx == nullptr) {
+        // 已销毁 / 从未初始化：别再解引用
+        return nullptr;
+    }
+
     jbyteArray our_msg = env->NewByteArray(ctx->key_size);
     env->SetByteArrayRegion(our_msg, 0, ctx->key_size, (jbyte *) ctx->key);
     return our_msg;
@@ -93,8 +106,16 @@ static jbyteArray PairingContext_Msg(JNIEnv *env, jobject obj, jlong ptr) {
 static jboolean PairingContext_InitCipher(JNIEnv *env, jobject obj, jlong ptr, jbyteArray jTheirMsg) {
     auto res = JNI_TRUE;
 
+    if (ptr == 0) {
+        return JNI_FALSE;
+    }
+
     auto ctx = (PairingContextNative *) ptr;
     auto spake2_ctx = ctx->spake2_ctx;
+    if (spake2_ctx == nullptr) {
+        // 已销毁 / 从未初始化
+        return JNI_FALSE;
+    }
     auto their_msg_size = env->GetArrayLength(jTheirMsg);
 
     if (their_msg_size > SPAKE2_MAX_MSG_SIZE) {
@@ -138,13 +159,21 @@ static jboolean PairingContext_InitCipher(JNIEnv *env, jobject obj, jlong ptr, j
 }
 
 static jbyteArray PairingContext_Encrypt(JNIEnv *env, jobject obj, jlong ptr, jbyteArray jIn) {
+    if (ptr == 0) {
+        return nullptr;
+    }
+
     auto ctx = (PairingContextNative *) ptr;
     auto aes_ctx = ctx->aes_ctx;
+    if (aes_ctx == nullptr) {
+        // 尚未配对成功（initCipher 没跑过）或已销毁
+        return nullptr;
+    }
 
     auto in = env->GetByteArrayElements(jIn, nullptr);
     auto in_size = env->GetArrayLength(jIn);
 
-    auto out_size = (size_t) in_size + EVP_AEAD_max_overhead(EVP_AEAD_CTX_aead(ctx->aes_ctx));
+    auto out_size = (size_t) in_size + EVP_AEAD_max_overhead(EVP_AEAD_CTX_aead(aes_ctx));
     uint8_t out[out_size];
 
     auto nonce_size = EVP_AEAD_nonce_length(EVP_AEAD_CTX_aead(aes_ctx));
@@ -169,8 +198,16 @@ static jbyteArray PairingContext_Encrypt(JNIEnv *env, jobject obj, jlong ptr, jb
 }
 
 static jbyteArray PairingContext_Decrypt(JNIEnv *env, jobject obj, jlong ptr, jbyteArray jIn) {
+    if (ptr == 0) {
+        return nullptr;
+    }
+
     auto ctx = (PairingContextNative *) ptr;
     auto aes_ctx = ctx->aes_ctx;
+    if (aes_ctx == nullptr) {
+        // 尚未配对成功（initCipher 没跑过）或已销毁
+        return nullptr;
+    }
 
     auto in = env->GetByteArrayElements(jIn, nullptr);
     auto in_size = env->GetArrayLength(jIn);
@@ -199,10 +236,38 @@ static jbyteArray PairingContext_Decrypt(JNIEnv *env, jobject obj, jlong ptr, jb
     return jOut;
 }
 
+/**
+ * 销毁原生配对上下文。
+ *
+ * 这里**必须**同时防住“空指针”和“重复调用”两种情况：
+ * Kotlin 侧的 `PairingContext.destroy()` 传的是 `private val nativePtr: Long` 的**值拷贝**，
+ * C++ 这边把指针置空改不到 Java 字段 —— 也就是说 Java 侧随时可能再传一次同一个已释放的
+ * 指针进来。没有 `spake2_ctx` 这道闸的话，第二次就是 double free。
+ *
+ * 释放后显式置空各字段：既让重复调用变成安全的 no-op，也避免悬垂指针被再次解引用
+ * （`spake2_ctx` 是结构体首成员，也顺带充当“是否还活着”的标志）。
+ */
 static void PairingContext_Destroy(JNIEnv *env, jobject obj, jlong ptr) {
+    if (ptr == 0) {
+        return;
+    }
+
     auto ctx = (PairingContextNative *) ptr;
+    if (ctx->spake2_ctx == nullptr) {
+        // 已经销毁过：重复调用直接放过，别再 free 一次
+        return;
+    }
+
     SPAKE2_CTX_free(ctx->spake2_ctx);
-    if (ctx->aes_ctx) EVP_AEAD_CTX_free(ctx->aes_ctx);
+    ctx->spake2_ctx = nullptr;
+
+    if (ctx->aes_ctx) {
+        EVP_AEAD_CTX_free(ctx->aes_ctx);
+        ctx->aes_ctx = nullptr;
+    }
+
+    // 抹掉密钥材料再释放（与 key 字段同一结构的其余部分一起清干净）
+    memset(ctx->key, 0, sizeof(ctx->key));
     free(ctx);
 }
 

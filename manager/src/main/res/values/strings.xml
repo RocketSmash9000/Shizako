@@ -479,6 +479,7 @@ The export function uses SAF (Storage Access Framework). It's reported that MIUI
     <string name="watchdog_notification_waiting">Waiting for Shizako to start\u2026</string>
     <string name="watchdog_notification_crashed">Crashed %1$d times, will retry\u2026</string>
     <string name="watchdog_notification_recovering">Not responding — low-frequency retry #%1$d every 5 min\u2026</string>
+    <string name="watchdog_notification_recovery_gave_up">Can\'t auto-reconnect — please start the service yourself (or re-grant permission / use root)</string>
     <string name="watchdog_notification_stopped_by_user">Service stopped by you — auto-reconnect paused</string>
     <string name="watchdog_action_kill">Kill background</string>
 

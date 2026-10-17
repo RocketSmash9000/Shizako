@@ -152,6 +152,17 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
     private var state: State = State.Ready
 
     /**
+     * 原生上下文是否已销毁。
+     *
+     * **必须**有这一道闸：native 侧的 `PairingContext_Destroy` 只做
+     * `SPAKE2_CTX_free` + `EVP_AEAD_CTX_free` + `free(ctx)`，既不判空也不置空
+     * （`adb_pairing.cpp:202-207`），指针仍留在 Java 字段里 —— 重复 destroy 就是
+     * double free。而 [close] 现在是**真的会被调用两次**：[start] 的 finally 一次、
+     * 调用方的 `use{}` 再一次。所以幂等性只能在这里保证。
+     */
+    private var pairingContextDestroyed = false
+
+    /**
      * 跑完整个配对流程；失败一律抛异常。
      *
      * 以前这里用 `return false` 表示失败，调用方（配对对话框 / 通知栏服务）拿不到任何
@@ -159,17 +170,29 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
      * 现在每种失败都有明确的类型：[AdbInvalidPairingCodeException] 是配对码不对或已失效，
      * [AdbPairingFailedException] 是协议/加密层断了，连接与握手阶段的异常（如
      * [java.net.ConnectException]、SSL 握手失败）原样向上抛。
+     *
+     * **清理由本方法自己负责**：无论成功、失败还是中途异常，都在 finally 里 [close]。
+     * 调用方只需要 `use { it.start() }`（或不写 use 也不会泄漏 socket 与原生上下文）。
+     * 这里不能用 `state` 当清理守卫 —— `state` 只在各阶段**成功之后**才推进，
+     * 建连阶段失败时它仍是 [State.Ready]，守卫会把 `pairingContext.destroy()` 整段跳过，
+     * 泄漏一块持有 SPAKE2 密钥的原生内存。
      */
     fun start() {
-        setupTlsConnection()
+        try {
+            setupTlsConnection()
 
-        state = State.ExchangingMsgs
-        doExchangeMsgs()
+            state = State.ExchangingMsgs
+            doExchangeMsgs()
 
-        state = State.ExchangingPeerInfo
-        doExchangePeerInfo()
+            state = State.ExchangingPeerInfo
+            doExchangePeerInfo()
 
-        state = State.Stopped
+            state = State.Stopped
+        } finally {
+            // 建连成功但后续握手失败时，原生上下文同样必须销毁；close() 内部先关流、
+            // 再销毁上下文，顺序不能反（destroy 之后 pairingContext 不可再用）。
+            close()
+        }
     }
 
     private fun setupTlsConnection() {
@@ -222,7 +245,10 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
     }
 
     private fun doExchangeMsgs() {
+        // native 未能产出本地公钥消息（上下文已销毁 / 构造异常）→ 协议层失败，
+        // 不是「配对码不对」。这里的 ?: 让 addExchangeMsgs 抛具名异常而不是 NPE。
         val msg = pairingContext.msg
+            ?: throw AdbPairingFailedException("no local SPAKE2 message available")
         val size = msg.size
 
         val ourHeader = createHeader(PairingPacketHeader.Type.SPAKE2_MSG, size)
@@ -271,21 +297,30 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
         Log.d(TAG, theirPeerInfo.toString())
     }
 
+    /**
+     * 幂等清理：关闭 socket，并销毁原生配对上下文。
+     *
+     * 不再用 `state != State.Ready` 当守卫 —— [start] 已经在 finally 里调用本方法，
+     * 而 `pairingContext` 是 lateinit：只有建连成功过它才算初始化，所以这里必须用
+     * [::pairingContext.isInitialized] 判断，否则会在“建连阶段就失败”的路径上抛
+     * UninitializedPropertyAccessException（那是崩溃，不是清理）。
+     */
     override fun close() {
         try {
-            inputStream.close()
+            if (::inputStream.isInitialized) inputStream.close()
         } catch (e: Throwable) {
         }
         try {
-            outputStream.close()
+            if (::outputStream.isInitialized) outputStream.close()
         } catch (e: Throwable) {
         }
         try {
-            socket.close()
-        } catch (e: Exception) {
+            if (::socket.isInitialized) socket.close()
+        } catch (e: Throwable) {
         }
 
-        if (state != State.Ready) {
+        if (::pairingContext.isInitialized && !pairingContextDestroyed) {
+            pairingContextDestroyed = true
             pairingContext.destroy()
         }
     }

@@ -251,6 +251,7 @@
     <string name="watchdog_notification_waiting">等待 Shizako酱 启动中…</string>
     <string name="watchdog_notification_crashed">已崩溃 %1$d 次，将重试…</string>
     <string name="watchdog_notification_recovering">服务没有响应 —— 已进入低频重试（第 %1$d 次，每 5 分钟一次）…</string>
+    <string name="watchdog_notification_recovery_gave_up">自动重连已放弃 —— 请手动启动服务（或重新授权限 / 改用 Root）</string>
     <string name="watchdog_notification_stopped_by_user">服务已被主人手动停止 —— 自动重连暂时压住了</string>
     <string name="watchdog_action_kill">杀后台</string>
 

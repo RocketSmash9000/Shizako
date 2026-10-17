@@ -469,6 +469,7 @@
 <string name="activation_quick_start_action_forget">忘記配對信息</string>
 <string name="watchdog_notification_crashed">已崩潰 %1$d 次，將重試…</string>
     <string name="watchdog_notification_recovering">服務沒有回應 —— 已進入低頻重試（第 %1$d 次，每 5 分鐘一次）…</string>
+    <string name="watchdog_notification_recovery_gave_up">自動重連已放棄 —— 請手動啟動服務（或重新授權限 / 改用 Root）</string>
     <string name="watchdog_notification_stopped_by_user">服務已被主人手動停止 —— 自動重連暫時壓住了</string>
 <string name="download_how_body">裝上、打開，等它來要權限的時候在 Shizako醬 這邊點同意就行（申請會出現在 Shizako醬 自己的授權列表裡）。本頁不做任何注入，也不會替你授權。</string>
 <string name="toolbox_group_modules">模塊與擴展</string>

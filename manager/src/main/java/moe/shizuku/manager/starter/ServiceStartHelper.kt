@@ -126,7 +126,7 @@ object ServiceStartHelper {
                     // （TCP 模式下它顺手把端口切到 5555 并关掉无线调试）
                     val discovered = CompletableDeferred<Int>()
                     val adbMdns = AdbMdns(appContext, AdbMdns.TLS_CONNECT) { p ->
-                        if (p > 0) discovered.complete(p)
+                        if (p.port > 0) discovered.complete(p.port)
                     }
                     adbMdns.start()
                     port = try {

@@ -366,10 +366,18 @@ class MainActivity : AppActivity() {
 
             // 风格状态：设置里切换后立即重组 → 宿主尺寸对齐 + 底栏形变过渡
             val glass = moe.shizuku.manager.ui.style.UiStyle.isGlass
-            androidx.compose.runtime.LaunchedEffect(glass) {
-                // 切到玻璃时先把磨砂底接上（幂等）
-                if (glass) ensureAcrylicNav()
+            // 实时磨砂也作为依赖读进来（isLiveBlurEnabled 内部订阅了 version 状态）：
+            // 以前只在 AppActivity.onCreate 里读一次，所以开关拨完必须退出重进才生效。
+            val liveBlur = moe.shizuku.manager.ui.glass.GlassMaterials.isLiveBlurEnabled()
+            androidx.compose.runtime.LaunchedEffect(glass, liveBlur) {
+                // 快照层跟着「玻璃 + 开关」走：两者任一关掉都别再每帧重录整屏
+                val active = glass && liveBlur
+                moe.shizuku.blurview.BlurTarget.snapshotEnabled = active
+                // 切到玻璃 + 开着磨砂时先把磨砂底接上（幂等，只接一次）
+                if (active) ensureAcrylicNav()
                 applyNavBarStyle()
+                // 已经接好线的情况下，这里即时开 / 关，不需要重建 Activity
+                binding.navBlur.setBlurEnabled(active)
             }
 
             // 入口与顺序来自用户自定义（设置 → 底部栏），改完立即重组，不重建 Activity

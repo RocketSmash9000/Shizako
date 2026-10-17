@@ -64,6 +64,9 @@
     <string name="settings_translation">參與翻譯</string>
     <string name="settings_translation_summary">協助我們將 %s 翻譯至您的語言</string>
     <string name="dialog_stop_message">Shizako 服務將被停止。</string>
+    <string name="settings_usage_mode">使用模式</string>
+    <string name="settings_usage_mode_simple">簡單模式 · 只顯示常用功能</string>
+    <string name="settings_usage_mode_advanced">進階模式 · 顯示全部功能</string>
     <string name="dialog_adb_port">配對通訊埠</string>
     <string name="dialog_adb_port_auto_filled">已自動偵測到配對通訊埠。若與裝置上顯示的通訊埠不同，請手動修改。</string>
     <string name="dialog_adb_port_manual_hint">請填「使用配對碼配對裝置」對話方塊裡顯示的通訊埠。\n注意：不是「無線偵錯」頁面頂端「IP 位址和通訊埠」那個 —— 那個是連線通訊埠，填了會在建立加密連線時失敗。</string>

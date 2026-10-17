@@ -25,6 +25,7 @@ class HomeAdapter(
         private const val ID_ADB_PERMISSION_LIMITED = 7L
         private const val ID_ACTIVATION = 8L
         private const val ID_INFO = 10L
+        private const val ID_USAGE_MODE = 11L
     }
 
     override fun onCreateCreatorPool(): IndexCreatorPool {
@@ -54,6 +55,10 @@ class HomeAdapter(
 
         clear()
         addItem(ServerStatusViewHolder.CREATOR, status, ID_STATUS)
+
+        // 使用模式开关紧跟状态卡：功能太多是第一眼的感受，总开关也放第一眼能看到的位置
+        addItem(UsageModeViewHolder.CREATOR, null, ID_USAGE_MODE)
+
         addItem(InfoCardViewHolder.CREATOR, status to grantedCount, ID_INFO)
 
         // 注：「管理应用」「终端」两张卡片已移除 ——

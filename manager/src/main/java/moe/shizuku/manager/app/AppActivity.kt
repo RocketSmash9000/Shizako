@@ -76,8 +76,10 @@ abstract class AppActivity : MaterialActivity() {
         // 实时磨砂关着的时候，BlurTarget 那层离屏 RenderNode 必须一起关：
         // 它会把整个内容区变成一个硬件层，每帧多录一遍，滚动时还比窗口背景慢一帧
         // （整屏背景抖 / 卡片边缘拖影都来自这里）。
+        // 另外非玻璃风格下根本没有磨砂底要喂，同样别开着录。
         moe.shizuku.blurview.BlurTarget.snapshotEnabled =
-            moe.shizuku.manager.ui.glass.GlassMaterials.isLiveBlurEnabled()
+            ThemeHelper.isUsingGlass() &&
+                moe.shizuku.manager.ui.glass.GlassMaterials.isLiveBlurEnabled()
         applyEdgeToEdge()
         moe.shizuku.manager.utils.StartupTrace.since(this, t0, "AppActivity.applyEdgeToEdge")
         val tBg = moe.shizuku.manager.utils.StartupTrace.now()

@@ -267,6 +267,9 @@
     <string name="tasker_adb_unavailable">ADB 自动启动不可用</string>
 
     <string name="settings_translation_summary">帮助我们将 %s 翻译至您的语言</string>
+    <string name="settings_usage_mode">使用模式</string>
+    <string name="settings_usage_mode_simple">简单模式 · 只显示常用功能</string>
+    <string name="settings_usage_mode_advanced">进阶模式 · 显示全部功能</string>
     <string name="dialog_adb_port">配对端口</string>
     <string name="dialog_adb_port_auto_filled">已自动识别到配对端口。若与设备上显示的端口不同，请手动修改。</string>
     <string name="dialog_adb_port_manual_hint">请填「使用配对码配对设备」对话框里显示的端口。\n注意：不是「无线调试」页面顶部「IP 地址和端口」那个 —— 那个是连接端口，填了会在建立加密连接时失败。</string>

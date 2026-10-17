@@ -45,6 +45,10 @@ class ShizukuApplication : Application() {
         CrashLog.install(this)
         StatusNotification.install(this)
         init(this)
+        // 使用模式（简单 / 进阶）在偏好初始化之后再读一次：
+        // FeatureMode 是单例，若在 initialize() 之前被谁顺手读了一下，
+        // 就会把默认档位锁死，用户上次选的进阶模式会「忘掉」。
+        moe.shizuku.manager.feature.FeatureMode.refresh()
     }
 
 }

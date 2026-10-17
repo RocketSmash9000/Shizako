@@ -56,6 +56,9 @@
 
 Note, do not disable \"Developer options\" or \"USB debugging\", or Shizako will be stopped."</string>
     <string name="dialog_adb_discovery_message_toggle_wireless_debugging">Please try to disable and enable \"Wireless debugging\" if it keeps searching.</string>
+    <string name="settings_usage_mode">Usage mode</string>
+    <string name="settings_usage_mode_simple">Simple mode — only everyday features are shown</string>
+    <string name="settings_usage_mode_advanced">Advanced mode — everything is shown</string>
     <string name="dialog_adb_port">Pairing port</string>
     <string name="dialog_adb_port_auto_filled">Pairing port detected automatically. Change it if your device shows a different port.</string>
     <string name="dialog_adb_port_manual_hint">Type the port shown in the \"Pair device with pairing code\" dialog.\nNote: this is NOT the port in the \"IP address &amp; port\" line at the top of the wireless debugging screen — that one is the connect port, and pairing will fail at the encrypted handshake if you use it.</string>

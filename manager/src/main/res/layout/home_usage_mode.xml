@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 首页的「使用模式」开关：简单模式 / 进阶模式。
+     放在首页而不是设置里 —— 这是「界面该有多复杂」的总开关，用户抱怨功能太多的
+     时候应该一进首页就能看到，而不是翻到设置最深处。
+     卡片样式跟随 ?ksuCardStyle（M3E / Miuix 自动切换圆角与底色）。 -->
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    style="?ksuCardStyle"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:clickable="true"
+    android:focusable="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/ksu_card_padding_large"
+        android:paddingTop="@dimen/ksu_card_padding"
+        android:paddingEnd="@dimen/ksu_card_padding_large"
+        android:paddingBottom="@dimen/ksu_card_padding">
+
+        <ImageView
+            android:id="@android:id/icon"
+            style="@style/CardIcon"
+            android:importantForAccessibility="no"
+            android:src="@drawable/ic_outline_tune_24" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/home_icon_padding"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@android:id/text1"
+                style="@style/CardTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_usage_mode" />
+
+            <TextView
+                android:id="@android:id/text2"
+                style="@style/CardSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@android:id/switch_widget"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/home_icon_padding" />
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

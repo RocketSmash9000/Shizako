@@ -6,7 +6,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -27,6 +26,8 @@ import androidx.navigation.fragment.findNavController
 import moe.shizuku.manager.MainActivity
 import moe.shizuku.manager.R
 import moe.shizuku.manager.databinding.FragmentSubPageBinding
+import moe.shizuku.manager.feature.FeatureLevel
+import moe.shizuku.manager.feature.FeatureMode
 import moe.shizuku.manager.fdroid.FdroidBuild
 import moe.shizuku.manager.settings.LabFeaturesScreen
 import moe.shizuku.manager.settings.ModulePolicyPage
@@ -144,7 +145,11 @@ class ToolboxFragment : Fragment() {
                     ToolboxPage.MAIN -> ToolboxScreen(
                         palette = palette,
                         listState = pageListState,
-                        groups = remember(style) { buildGroups() },
+                        // 模式也要参与 remember 的键：切到简单模式时条目必须重新过滤，
+                        // 否则会拿着上一档的列表继续显示
+                        groups = remember(style, moe.shizuku.manager.feature.FeatureMode.current) {
+                            buildGroups()
+                        },
                         onCollapsedChange = pageCollapsedChange,
                     )
 
@@ -248,33 +253,34 @@ class ToolboxFragment : Fragment() {
             titleRes = R.string.toolbox_group_modules,
             items = listOf(
                 entry(R.drawable.ic_outline_extension_24, R.string.modules_title,
-                    R.string.settings_open_modules_summary) { page = ToolboxPage.MODULES },
+                    R.string.settings_open_modules_summary, FeatureLevel.ADVANCED) { page = ToolboxPage.MODULES },
                 entry(R.drawable.ic_outline_apps_24, R.string.settings_module_catalog,
-                    R.string.settings_module_catalog_summary) { page = ToolboxPage.MODULE_CATALOG },
+                    R.string.settings_module_catalog_summary, FeatureLevel.ADVANCED) { page = ToolboxPage.MODULE_CATALOG },
                 entry(R.drawable.ic_code_24dp, R.string.settings_module_policy,
-                    R.string.settings_module_policy_summary) { page = ToolboxPage.MODULE_POLICY },
+                    R.string.settings_module_policy_summary, FeatureLevel.ADVANCED) { page = ToolboxPage.MODULE_POLICY },
             ),
         ),
         ToolboxGroup(
             titleRes = R.string.toolbox_group_console,
             items = listOf(
                 entry(R.drawable.ic_terminal_24, R.string.comput_title,
-                    R.string.settings_open_comput_summary) { page = ToolboxPage.COMPUT },
+                    R.string.settings_open_comput_summary, FeatureLevel.ADVANCED) { page = ToolboxPage.COMPUT },
                 entry(R.drawable.ic_outline_settings_24, R.string.comput_settings,
-                    R.string.toolbox_summary_comput_settings) { page = ToolboxPage.COMPUT_SETTINGS },
+                    R.string.toolbox_summary_comput_settings, FeatureLevel.ADVANCED) { page = ToolboxPage.COMPUT_SETTINGS },
                 entry(R.drawable.ic_help_outline_24dp, R.string.home_terminal_title,
-                    R.string.toolbox_summary_terminal) { openDestination(R.id.terminal_fragment) },
+                    R.string.toolbox_summary_terminal, FeatureLevel.ADVANCED) { openDestination(R.id.terminal_fragment) },
                 entry(R.drawable.ic_outline_assignment_24, R.string.api_log_title,
-                    R.string.settings_api_log_summary) { openDestination(R.id.logs_fragment) },
+                    R.string.settings_api_log_summary, FeatureLevel.ADVANCED) { openDestination(R.id.logs_fragment) },
             ),
         ),
         ToolboxGroup(
             titleRes = R.string.toolbox_group_automation,
             items = listOf(
+                // 无障碍留在简单模式：它算常用功能，而且别的入口都不通到这里
                 entry(R.drawable.ic_outline_notifications_active_24, R.string.accessibility_manager,
                     R.string.settings_open_accessibility_summary) { page = ToolboxPage.ACCESSIBILITY },
                 entry(R.drawable.ic_outline_info_24, R.string.settings_lab,
-                    R.string.settings_lab_summary) { page = ToolboxPage.LAB },
+                    R.string.settings_lab_summary, FeatureLevel.ADVANCED) { page = ToolboxPage.LAB },
             ),
         ),
         ToolboxGroup(
@@ -286,10 +292,10 @@ class ToolboxFragment : Fragment() {
                 // 既是分发第三方二进制，也与「不得绕过商店安装应用」相抵触 —— 见 FdroidBuild
                 if (FdroidBuild.allowOneClickInject) {
                     add(entry(R.drawable.ic_wireless_adb_24dp, R.string.download_page_title,
-                        R.string.settings_recommended_apps_summary) { openDestination(R.id.apps_download_fragment) })
+                        R.string.settings_recommended_apps_summary, FeatureLevel.ADVANCED) { openDestination(R.id.apps_download_fragment) })
                 }
                 add(entry(R.drawable.ic_dhizuku_24dp, R.string.activation_method_dhizuku,
-                    R.string.toolbox_summary_dhizuku) {
+                    R.string.toolbox_summary_dhizuku, FeatureLevel.ADVANCED) {
                     // Dhizuku 的授权管理在「被调教的小可爱们」的第二页 —— 同样按次级页 push
                     openDestination(R.id.apps_fragment)
                 })
@@ -307,14 +313,19 @@ class ToolboxFragment : Fragment() {
                     R.string.toolbox_summary_settings) { openDestination(R.id.settings_fragment) },
             ),
         ),
-    )
+    ).mapNotNull { group ->
+        // 简单模式：先把该档位看不到的条目剔掉；整组都空了就不显示这个分区标题
+        val visible = group.items.filter { FeatureMode.allows(it.level) }
+        if (visible.isEmpty()) null else group.copy(items = visible)
+    }
 
     private fun entry(
         iconRes: Int,
         titleRes: Int,
         summaryRes: Int,
+        level: FeatureLevel = FeatureLevel.SIMPLE,
         open: () -> Unit,
-    ) = ToolboxItem(iconRes, titleRes, summaryRes, open)
+    ) = ToolboxItem(iconRes, titleRes, summaryRes, open, level)
 
     private fun openTab(tab: String) {
         val context = context ?: return

@@ -30,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import moe.shizuku.manager.R
+import moe.shizuku.manager.feature.FeatureLevel
 import moe.shizuku.manager.ui.hint.HintCard
 import moe.shizuku.manager.ui.hint.HintNote
 import moe.shizuku.manager.ui.hint.HintPage
@@ -49,6 +50,8 @@ data class ToolboxItem(
     @StringRes val titleRes: Int,
     @StringRes val summaryRes: Int,
     val action: () -> Unit,
+    /** 至少需要哪个使用模式才显示（默认简单模式就显示）。 */
+    val level: FeatureLevel = FeatureLevel.SIMPLE,
 )
 
 /** 工具箱的一个分区（模块 / 控制台 / 无障碍 / 设备 …）。 */

@@ -52,6 +52,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import moe.shizuku.manager.R
+import moe.shizuku.manager.feature.FeatureMode
 import moe.shizuku.manager.fdroid.FdroidBuild
 import moe.shizuku.manager.ui.hint.HintCard
 import moe.shizuku.manager.ui.hint.HintPage
@@ -374,6 +375,8 @@ private fun MainPage(
         }
         item {
             HintCard(palette = palette, modifier = Modifier.itemEntrance(1)) {
+                // 注：简单 / 进阶的总开关在**首页**那张卡片上，不在这里 ——
+                // 这是「界面该有多复杂」的总开关，该放在第一眼就能看到的地方。
                 HintSectionTitle(
                     palette = palette,
                     text = stringResource(R.string.settings_group_appearance),
@@ -397,25 +400,31 @@ private fun MainPage(
                     },
                     onClick = { onOpen(SettingsPage.BACKGROUND) },
                 )
-                NavRow(
-                    palette = palette,
-                    iconRes = R.drawable.ic_outline_dock_24,
-                    title = stringResource(R.string.settings_nav_bar),
-                    summary = navBarSummary(),
-                    onClick = { onOpen(SettingsPage.NAV) },
-                )
+                // 底部栏自定义属于进阶功能：简单模式下不暴露「把入口收起来又找不回来」的风险
+                if (FeatureMode.isAdvanced) {
+                    NavRow(
+                        palette = palette,
+                        iconRes = R.drawable.ic_outline_dock_24,
+                        title = stringResource(R.string.settings_nav_bar),
+                        summary = navBarSummary(),
+                        onClick = { onOpen(SettingsPage.NAV) },
+                    )
+                }
                 HintSectionTitle(
                     palette = palette,
                     text = stringResource(R.string.settings_group_system),
                     modifier = Modifier.padding(top = 10.dp),
                 )
-                NavRow(
-                    palette = palette,
-                    iconRes = R.drawable.ic_bolt_24dp,
-                    title = stringResource(R.string.settings_stability),
-                    summary = null,
-                    onClick = { onOpen(SettingsPage.STARTUP) },
-                )
+                // 稳定性 / 自动化那一页全是保活、重连、看门狗之类的开关，归进阶
+                if (FeatureMode.isAdvanced) {
+                    NavRow(
+                        palette = palette,
+                        iconRes = R.drawable.ic_bolt_24dp,
+                        title = stringResource(R.string.settings_stability),
+                        summary = null,
+                        onClick = { onOpen(SettingsPage.STARTUP) },
+                    )
+                }
                 NavRow(
                     palette = palette,
                     iconRes = R.drawable.ic_outline_translate_24,
@@ -423,17 +432,20 @@ private fun MainPage(
                     summary = state.languageLabel,
                     onClick = { onOpen(SettingsPage.LANGUAGE) },
                 )
-                NavRow(
-                    palette = palette,
-                    iconRes = R.drawable.ic_code_24dp,
-                    title = stringResource(R.string.settings_api_log),
-                    summary = if (state.apiLogEnabled) {
-                        stringResource(R.string.settings_api_log_summary)
-                    } else {
-                        stringResource(R.string.settings_api_log_enabled)
-                    },
-                    onClick = { onOpen(SettingsPage.DEBUG) },
-                )
+                // API 调用日志是排查利器，但对普通用户就是一堆噪音
+                if (FeatureMode.isAdvanced) {
+                    NavRow(
+                        palette = palette,
+                        iconRes = R.drawable.ic_code_24dp,
+                        title = stringResource(R.string.settings_api_log),
+                        summary = if (state.apiLogEnabled) {
+                            stringResource(R.string.settings_api_log_summary)
+                        } else {
+                            stringResource(R.string.settings_api_log_enabled)
+                        },
+                        onClick = { onOpen(SettingsPage.DEBUG) },
+                    )
+                }
                 HintSectionTitle(
                     palette = palette,
                     text = stringResource(R.string.settings_group_about),

@@ -24,6 +24,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import moe.shizuku.manager.R
 import moe.shizuku.manager.ShizukuSettings
+import moe.shizuku.manager.feature.FeatureLevel
+import moe.shizuku.manager.feature.FeatureMode
 
 /**
  * 底栏入口的自定义：**显示哪些 + 什么顺序**，持久化在偏好设置里。
@@ -39,6 +41,8 @@ data class NavTabSpec(
     @DrawableRes val iconRes: Int,
     val icon: ImageVector,
     val selectedIcon: ImageVector,
+    /** 至少需要哪个使用模式才出现在底栏（默认简单模式就显示）。 */
+    val level: FeatureLevel = FeatureLevel.SIMPLE,
 )
 
 object NavTabs {
@@ -67,18 +71,23 @@ object NavTabs {
         NavTabSpec(
             KEY_LOGS, R.id.logs_fragment, R.string.api_log_title,
             R.drawable.ic_outline_assignment_24, Icons.Outlined.Assignment, Icons.Filled.Assignment,
+            // 看 API 调用流水是排查用的，归进阶
+            level = FeatureLevel.ADVANCED,
         ),
         NavTabSpec(
             KEY_MODULES, R.id.modules_fragment, R.string.modules_title,
             R.drawable.ic_outline_extension_24, Icons.Outlined.Extension, Icons.Filled.Extension,
+            level = FeatureLevel.ADVANCED,
         ),
         NavTabSpec(
             KEY_COMPUT, R.id.comput_fragment, R.string.comput_title,
             R.drawable.ic_terminal_24, Icons.Outlined.Terminal, Icons.Filled.Terminal,
+            level = FeatureLevel.ADVANCED,
         ),
         NavTabSpec(
             KEY_TOOLS, R.id.toolbox_fragment, R.string.toolbox_title,
             R.drawable.ic_toolbox_24, Icons.Outlined.Build, Icons.Filled.Build,
+            // 工具箱留在简单模式：无障碍这类「常用但藏得深」的入口需要从这里进
         ),
         NavTabSpec(
             KEY_SETTINGS, R.id.settings_fragment, R.string.settings_title,
@@ -135,22 +144,27 @@ object NavTabs {
     // 用一个版本号把它们缓存住，只有 setEnabled/move/reset 之后才失效。
 
     private var cacheVersion = -1
+    private var cacheMode = ""
     private var cachedOrder: List<NavTabSpec> = emptyList()
     private var cachedHidden: Set<String> = emptySet()
     private var cachedVisible: List<NavTabSpec> = emptyList()
 
     private fun ensureCache() {
         val v = version // 订阅：改完自动重组
-        if (v == cacheVersion) return
+        // 使用模式也要参与缓存键：切到简单模式后，进阶入口必须立刻从底栏消失
+        val mode = FeatureMode.current // 订阅：切模式后同样重组
+        if (v == cacheVersion && mode == cacheMode) return
         val saved = split(prefs().getString(PREF_ORDER, null))
         val known = saved.mapNotNull { key -> all.firstOrNull { it.key == key } }
         val order = known + all.filter { spec -> known.none { it.key == spec.key } }
         val hidden = hiddenKeysUncached()
         cachedOrder = order
         cachedHidden = hidden
-        cachedVisible = order.filter { it.key !in hidden }
+        // 两道过滤：用户自己收起来的（hidden） + 当前模式不放出来的（level）
+        cachedVisible = order.filter { it.key !in hidden && FeatureMode.allows(it.level) }
             .ifEmpty { all.filter { it.key == KEY_HOME } }
         cacheVersion = v
+        cacheMode = mode
     }
 
     /** 当前顺序（含被隐藏的）：偏好里没记录的（新增入口）接在末尾 */

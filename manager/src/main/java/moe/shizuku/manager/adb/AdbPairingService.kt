@@ -156,7 +156,9 @@ class AdbPairingService : Service() {
 
     private fun onInput(code: String, port: Int): Notification {
         GlobalScope.launch(Dispatchers.IO) {
-            val host = "127.0.0.1"
+            // 候选地址：回环优先，回环连不上时改用本机局域网地址兜底
+            // （部分设备/ROM 上应用连不上自己的 127.0.0.1，见 AdbPairingClient 类注释）
+            val hosts = AdbPairingClient.candidateHosts(this@AdbPairingService)
 
             val preferences = ShizukuSettings.getPreferences()
             // 配对期间的密钥只留内存，配对成功才落盘 —— 一次失败的尝试不该留在本地，
@@ -175,7 +177,7 @@ class AdbPairingService : Service() {
             // 这里再套一层是防止将来有人改动 start() 的清理逻辑）。原先这里既没 use 也没 close：
             // 每次配对（含失败重试）都泄漏两个 fd + 一块持有 SPAKE2 密钥的原生内存。
             val result = runCatching {
-                AdbPairingClient(host, port, code, key).use { client ->
+                AdbPairingClient(hosts, port, code, key).use { client ->
                     client.start()
                 }
             }

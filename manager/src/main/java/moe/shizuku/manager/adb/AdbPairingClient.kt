@@ -133,8 +133,17 @@ private class PairingPacketHeader(
     }
 }
 
+/**
+ * @param hosts 候选地址，按顺序尝试。第一个能建立 TCP 连接的就用它跑完整个配对。
+ *
+ * 为什么要多个：adbd 的配对服务通常同时监听回环与局域网地址，所以硬编码
+ * `127.0.0.1` 在绝大多数设备上都能用。但**有些设备/ROM 上应用连不上自己的回环地址**
+ * （有实际反馈：同一台设备上 Termux 与电脑都能配对，本应用连 `127.0.0.1:<配对端口>`
+ * 却直接 ConnectException）。这种情况下用设备自己的局域网 IP 是有效的备选 ——
+ * 系统「使用配对码配对设备」对话框里显示的就是那个地址。
+ */
 @RequiresApi(Build.VERSION_CODES.R)
-class AdbPairingClient(private val host: String, private val port: Int, private val pairCode: String, private val key: AdbKey) : Closeable {
+class AdbPairingClient(private val hosts: List<String>, private val port: Int, private val pairCode: String, private val key: AdbKey) : Closeable {
 
     private enum class State {
         Ready,
@@ -165,37 +174,55 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
     /**
      * 跑完整个配对流程；失败一律抛异常。
      *
-     * 以前这里用 `return false` 表示失败，调用方（配对对话框 / 通知栏服务）拿不到任何
-     * 原因，用户看到的就是「转一下圈，然后什么也没发生」—— 配不上，也不知道为什么。
-     * 现在每种失败都有明确的类型：[AdbInvalidPairingCodeException] 是配对码不对或已失效，
-     * [AdbPairingFailedException] 是协议/加密层断了，连接与握手阶段的异常（如
-     * [java.net.ConnectException]、SSL 握手失败）原样向上抛。
-     *
      * **清理由本方法自己负责**：无论成功、失败还是中途异常，都在 finally 里 [close]。
      * 调用方只需要 `use { it.start() }`（或不写 use 也不会泄漏 socket 与原生上下文）。
      * 这里不能用 `state` 当清理守卫 —— `state` 只在各阶段**成功之后**才推进，
      * 建连阶段失败时它仍是 [State.Ready]，守卫会把 `pairingContext.destroy()` 整段跳过，
      * 泄漏一块持有 SPAKE2 密钥的原生内存。
+     *
+     * 地址逐个尝试：只有 **TCP 连接建立不起来**（ConnectException / 连接超时）才会换下一个候选。
+     * 一旦连上了，协议层或配对码的错误都直接抛出 —— 那说明地址没问题，换地址不会让配对码变对，
+     * 反而会误导用户去改端口。
      */
     fun start() {
-        try {
-            setupTlsConnection()
+        var lastConnectFailure: Throwable? = null
 
-            state = State.ExchangingMsgs
-            doExchangeMsgs()
+        for ((index, candidate) in hosts.withIndex()) {
+            try {
+                setupTlsConnection(candidate)
+            } catch (e: Throwable) {
+                if (isConnectFailure(e) && index < hosts.lastIndex) {
+                    // 这个地址连不上，且还有备选：换下一个（顺手关掉刚建出来的 socket）
+                    closeSockets()
+                    lastConnectFailure = e
+                    Log.w(TAG, "Pairing connect to $candidate:$port failed (${e.javaClass.simpleName}), trying next host")
+                    continue
+                }
+                throw e
+            }
 
-            state = State.ExchangingPeerInfo
-            doExchangePeerInfo()
+            try {
+                state = State.ExchangingMsgs
+                doExchangeMsgs()
 
-            state = State.Stopped
-        } finally {
-            // 建连成功但后续握手失败时，原生上下文同样必须销毁；close() 内部先关流、
-            // 再销毁上下文，顺序不能反（destroy 之后 pairingContext 不可再用）。
-            close()
+                state = State.ExchangingPeerInfo
+                doExchangePeerInfo()
+
+                state = State.Stopped
+                return
+            } finally {
+                // 建连成功但后续握手失败时，原生上下文同样必须销毁；close() 内部先关流、
+                // 再销毁上下文，顺序不能反（destroy 之后 pairingContext 不可再用）。
+                close()
+            }
         }
+
+        // 所有候选都连不上
+        throw lastConnectFailure
+            ?: AdbPairingFailedException("no usable host among ${hosts.joinToString()}")
     }
 
-    private fun setupTlsConnection() {
+    private fun setupTlsConnection(host: String) {
         // 必须带超时：配对时用户可能停在系统「使用配对码配对设备」对话框里不动，
         // 而 connect / 握手 / 读包任何一步永久阻塞，都会让通知一直停在「配对中」、
         // 对话框按钮永远禁用（只能杀进程恢复）。数值与 AdbClient 保持一致（10s / 15s）。
@@ -208,7 +235,10 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
         val sslSocket = sslContext.socketFactory.createSocket(socket, host, port, true) as SSLSocket
         sslSocket.soTimeout = READ_TIMEOUT_MS
         sslSocket.startHandshake()
-        Log.d(TAG, "Handshake succeeded.")
+        // 记下**实际连上的是哪个地址**：回环还是局域网兜底。
+        // 现场反馈「配对连不上」时，这一行能直接分辨「回环不通、已走兜底」和「压根没连上」，
+        // 不必再靠猜。
+        Log.i(TAG, "Handshake succeeded via $host:$port")
 
         inputStream = DataInputStream(sslSocket.inputStream)
         outputStream = DataOutputStream(sslSocket.outputStream)
@@ -223,6 +253,18 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
         checkNotNull(pairingContext) { "Unable to create PairingContext." }
         this.pairingContext = pairingContext
     }
+
+    /**
+     * 只有「立刻就能判定连不上」才换地址重试。
+     *
+     * 刻意**不含** [java.net.SocketTimeoutException]：那是等满 10s 建连 / 15s 读之后才得到的
+     * 结论，换地址多半也是同样结果，却会把用户的等待时间翻倍（配对本身已有 10s+15s 的上限）。
+     * 超时直接抛给界面，比让用户干等两轮更负责。
+     */
+    private fun isConnectFailure(e: Throwable): Boolean =
+        e is java.net.ConnectException ||
+                e is java.net.NoRouteToHostException ||
+                e is java.net.UnknownHostException
 
     private fun createHeader(type: PairingPacketHeader.Type, payloadSize: Int): PairingPacketHeader {
         return PairingPacketHeader(kCurrentKeyHeaderVersion, type.value, payloadSize)
@@ -298,14 +340,12 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
     }
 
     /**
-     * 幂等清理：关闭 socket，并销毁原生配对上下文。
+     * 只关 socket / 流，不动原生上下文。
      *
-     * 不再用 `state != State.Ready` 当守卫 —— [start] 已经在 finally 里调用本方法，
-     * 而 `pairingContext` 是 lateinit：只有建连成功过它才算初始化，所以这里必须用
-     * [::pairingContext.isInitialized] 判断，否则会在“建连阶段就失败”的路径上抛
-     * UninitializedPropertyAccessException（那是崩溃，不是清理）。
+     * 供「某个候选地址连不上、准备换下一个」时使用：那时 `pairingContext` 还没建，
+     * 而且马上要用同一个实例重试，不能走 [close] 的幂等销毁逻辑。
      */
-    override fun close() {
+    private fun closeSockets() {
         try {
             if (::inputStream.isInitialized) inputStream.close()
         } catch (e: Throwable) {
@@ -318,6 +358,18 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
             if (::socket.isInitialized) socket.close()
         } catch (e: Throwable) {
         }
+    }
+
+    /**
+     * 幂等清理：关闭 socket，并销毁原生配对上下文。
+     *
+     * 不再用 `state != State.Ready` 当守卫 —— [start] 已经在 finally 里调用本方法，
+     * 而 `pairingContext` 是 lateinit：只有建连成功过它才算初始化，所以这里必须用
+     * [::pairingContext.isInitialized] 判断，否则会在“建连阶段就失败”的路径上抛
+     * UninitializedPropertyAccessException（那是崩溃，不是清理）。
+     */
+    override fun close() {
+        closeSockets()
 
         if (::pairingContext.isInitialized && !pairingContextDestroyed) {
             pairingContextDestroyed = true
@@ -329,6 +381,21 @@ class AdbPairingClient(private val host: String, private val port: Int, private 
 
         init {
             System.loadLibrary("adb")
+        }
+
+        /**
+         * 组装候选地址：回环优先，其次本机局域网地址。
+         *
+         * 绝大多数设备用回环就够了（也是原来的行为），局域网地址只在回环连不上时兜底 ——
+         * 见 [AdbPairingClient] 的类注释。拿不到局域网地址就只用回环。
+         */
+        fun candidateHosts(context: android.content.Context): List<String> {
+            val list = mutableListOf("127.0.0.1")
+            runCatching { moe.shizuku.manager.utils.NetworkUtils.findLanIpv4() }
+                .getOrNull()
+                ?.takeIf { it.isNotBlank() && it != "127.0.0.1" }
+                ?.let { list.add(it) }
+            return list
         }
 
         @JvmStatic

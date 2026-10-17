@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
 /**
  * 网络可用性判断。
@@ -32,6 +34,30 @@ object NetworkUtils {
             }
         } catch (e: Throwable) {
             true
+        }
+    }
+
+    /**
+     * 取本机在局域网里的 IPv4 地址（拿不到返回 null）。
+     *
+     * 用途：配对时作为回环地址的**备选**。adbd 的配对服务会把地址显示成
+     * `192.168.x.x:端口`，回环通常也能连，但个别设备/ROM 上应用连不上自己的
+     * `127.0.0.1`，这时用这个地址就能连上。
+     *
+     * 只挑「已启用、非回环」的接口，且排除 `169.254.x.x`（链路本地，没有意义）
+     * 与 `0.0.0.0`。任何异常都当作拿不到 —— 调用方会退回只用回环。
+     */
+    fun findLanIpv4(): String? {
+        return try {
+            NetworkInterface.getNetworkInterfaces()?.asSequence()
+                ?.filter { it.isUp && !it.isLoopback }
+                ?.flatMap { it.inetAddresses.asSequence() }
+                ?.filterIsInstance<Inet4Address>()
+                ?.map { it.hostAddress }
+                ?.filterNotNull()
+                ?.firstOrNull { it != "0.0.0.0" && !it.startsWith("169.254.") }
+        } catch (e: Throwable) {
+            null
         }
     }
 }

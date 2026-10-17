@@ -65,7 +65,8 @@ import javax.net.ssl.SSLException
  *
  * 现代 Android 要求「使用配对码配对设备」的系统对话框在配对期间保持可见，
  * 所以正确姿势是分屏：左边 Shizako、右边系统配对对话框，两者同屏 ——
- * 这里自动发现配对端口，输入 6 位配对码后直连 127.0.0.1 完成配对。
+ * 这里自动发现配对端口，输入 6 位配对码后连接本机回环完成配对（回环连不上时
+ * 自动改用本机局域网地址，见 [AdbPairingClient] 的候选地址说明）。
  *
  * 端口**任何时候都能手输**（不只是自动发现之后）：mDNS 用的是组播，GrapheneOS 开着 VPN
  * 时组播不会送进 App，华为 / 鸿蒙部分机型同样拦 —— 这类设备上自动发现必然失败，
@@ -288,7 +289,9 @@ fun AdbPairDialog(
                             isPairing = true
                             generalError = null
                             scope.launch(Dispatchers.IO) {
-                                val host = "127.0.0.1"
+                                // 候选地址：回环优先，回环连不上时改用本机局域网地址兜底
+                                // （部分设备/ROM 上应用连不上自己的 127.0.0.1，见 AdbPairingClient 类注释）
+                                val hosts = AdbPairingClient.candidateHosts(context)
                                 // 配对期间的密钥只留在内存里，配对真的成功才落盘：
                                 // 一次失败的尝试不该在本地留下一把 adbd 不认识的密钥，
                                 // 否则激活页会把它当成「已配对」的证据（用户根本没配上）。
@@ -312,7 +315,7 @@ fun AdbPairDialog(
                                 // 原先这里既没 use 也没 close：每次配对尝试（含失败重试）都会泄漏
                                 // 两个 fd + 一块持有 SPAKE2 密钥的原生内存。
                                 val result = runCatching {
-                                    AdbPairingClient(host, port, pairingCode, key).use { client ->
+                                    AdbPairingClient(hosts, port, pairingCode, key).use { client ->
                                         client.start()
                                     }
                                 }

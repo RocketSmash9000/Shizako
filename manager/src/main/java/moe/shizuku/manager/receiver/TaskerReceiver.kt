@@ -162,8 +162,27 @@ class TaskerReceiver : BroadcastReceiver() {
         }
     }
 
+    /**
+     * 弹 Toast —— **必须切到主线程**。
+     *
+     * [ServiceStartHelper.startRoot] 的回调跑在 `Dispatchers.IO` 上，而 `Toast.makeText`
+     * 在「没有 Looper 的线程」上会抛：
+     *   `NullPointerException: Can't toast on a thread that has not called Looper.prepare()`
+     * 这是**未捕获异常，会直接杀掉进程**（`onReceive` 里的 try/catch 兜不住 —— 回调是稍后
+     * 异步执行的）。真机实测：在已 root 的设备上发 `START_ROOT` 广播，App 必崩，
+     * 而 root 激活恰恰是这类设备最常用的路径。
+     *
+     * 顺带一提：崩溃发生在 starter 已经跑起来之后，所以服务其实起来了，死的是 App 自己 ——
+     * 用户看到的是「点了启动，App 没了」。
+     */
     private fun showToast(context: Context, resId: Int) {
-        Toast.makeText(context, resId, Toast.LENGTH_SHORT).show()
+        mainHandler.post {
+            try {
+                Toast.makeText(context, resId, Toast.LENGTH_SHORT).show()
+            } catch (t: Throwable) {
+                Log.w(AppConstants.TAG, "showToast: ${t.message}", t)
+            }
+        }
     }
 
     /**
